@@ -102,3 +102,39 @@
 - [11-future-ideas.md](11-future-ideas.md) 已采纳进 V1.1 的条目（白噪音、成就、统计详情）标记「采纳进 V1.1」
 
 **下一步**：V1.1 子项 1（音效 + 振动）首发开工——已有 AudioService 基础，工作量最小，做完先 commit 让用户即刻体验。
+
+---
+
+## 2026-06-23 路线追加：桌面端纳入路线，Web 端稳定后启动，主打音乐番茄钟
+
+**背景**：用户调研到 [InfinityLink](https://github.com/BetterNCM/InfinityLink)（BetterNCM 插件，向 Windows SMTC 写入网易云播放信息），问能否用于音乐番茄钟功能（[01-product-vision.md](01-product-vision.md) V2.0 既有项）。结论是飘悠番茄走 Web 路线无法消费跨进程播放信息——只有桌面壳能做。讨论后用户拍板：Web 端继续做，桌面端作为未来形态纳入路线，音乐番茄钟做成桌面端的差异化卖点。
+
+**核心决策**：
+
+1. **桌面端不是 Web 端套壳，而是 Web 端的增强形态**。Web 端保持「任意浏览器打开即用、纯本地零追踪」定位不变；桌面端做 Web 端做不到的事——音乐番茄钟（消费 SMTC）、托盘常驻、全局快捷键、真后台精确计时、稳定本地通知、开机自启。
+
+2. **技术选型 Tauri**。理由：Rust 后端、吃 Vite 产物零迁移、5MB 安装包、30MB 内存。Electron 作 escape hatch 保留（若 Tauri 上某 Windows API 跑不通才回退）。
+
+3. **首发只锁 Windows**。macOS（`MPNowPlayingInfoCenter` 私有 API + 签名复杂）推到桌面 V1.1；Linux（MPRIS 碎片化）桌面 V1.0 不出。
+
+4. **代码组织：单仓库 + 平台抽象层**，禁止双 git 分支 / 双 build target（同 2026-06-23 第一条对「双线维护陷阱」的红线）。启动桌面端时迁移到 `packages/{core,ui,platform}` + `apps/{web,desktop}` monorepo 布局，platform 抽 `MusicSource / Notification / Storage / Shortcut` 接口双实现。
+
+5. **音乐番茄钟数据来源 = 消费 SMTC，不写入 SMTC**。任何接入 SMTC 的播放器（Spotify / Foobar / 浏览器内 YouTube / Apple Music for Windows / 接入 InfinityLink 后的网易云）都能读到。**飘悠番茄不打包任何第三方插件**——BetterNCM / InfinityLink 在帮助文档列为「想听网易云？请装这个」的用户侧前置条件。
+
+6. **不做桌面端独占功能**（同 2026-06-23 第一条对云同步「避免本地版降级为试用版」的红线）。桌面端只做形态差异化，不做产品功能差异化——避免 Web 端用户被边缘化。
+
+7. **启动条件**：Web V1.0 上线 + V1.1 + V1.2 + V2.0（含番茄音乐模式前端）全部交付后才开桌面端工。理由：刚脱掉鸿蒙双线（2026-06-22 修订），不能马上又开新双线；音频生态先在 Web 验证，桌面端复用而非重发明。
+
+8. **数据互通**：沿用 2026-06-23 第一条云同步决策——本地纯净、不互通。桌面端与 Web 端各自独立存数据，UI 层明示。
+
+**沉淀**：
+- 新增 [13-desktop-roadmap.md](13-desktop-roadmap.md) 作桌面端单一信源，含选型 / 数据流 / UI / 风险 / 工作量（9~10 天）/ 启动条件
+- [README.md](README.md) 文档索引追加第 13 行
+- [11-future-ideas.md](11-future-ideas.md) 路线小节追加「Desktop V1.0 桌面端（Tauri）」一行，详情指向 13
+- [01-product-vision.md](01-product-vision.md) V2.0「番茄音乐模式」段落追加跳转——具体形态见 13
+
+**不沉淀**（保持现状）：
+- V1.0 ~ V1.2 范围、技术栈、铁律、设计 token 全部不动
+- 现有 `src/` 代码结构暂不重构——桌面端启动时一次性迁 monorepo，避免现阶段为"未来可能"做预测性返工（CLAUDE.md 准则 2 简单优先）
+
+**下一步**：本决策仅落文档，**不动代码**。回到 V1.1 主线（音效 + 振动 → 白噪音 MVP → 统计时间线 → 成就）。
