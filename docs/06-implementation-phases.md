@@ -215,7 +215,57 @@
 
 ## V1.2 — 音频深化 + 番茄日记（4-6 天）
 
-详见 [01-product-vision.md](01-product-vision.md)。
+总体见 [01-product-vision.md](01-product-vision.md)。本版按 4 个独立可交付 PR 拆解，每步独立 commit、独立可回滚：
+
+| 顺序 | 子项 | 估时 | 拆点逻辑 |
+|---|---|---|---|
+| **#1** | 番茄日记 | 1.5 天 | 唯一**产品风险点**，提前做以早暴露 UX 反馈 |
+| **#2** | 多轨混音底座（HTML5 audio → Web Audio API 重写 WhiteNoiseService，**保持单轨行为不变**） | 1.5 天 | 零功能回归的底层迁移，与上层 UI 解耦回滚 |
+| **#3** | 多轨混音 UI + 真实音频频谱（AnalyserNode） | 1.5 天 | 在 #2 底座上做加法 |
+| **#4** | 用户上传本地音频（≤5MB blob） + 数字样式扩到 6 种 | 1 天 | 两个轻量收尾项打包 |
+
+---
+
+### V1.2 #1 番茄日记（1.5 天）
+
+> 文档单一信源：心情 5 档 / 触发模式 / 字数限制 / Toast 撞车规则 / 级联删除等规则见 [04-data-model.md 番茄日记](04-data-model.md#番茄日记v12-1)；产品决策追溯见 [10-decisions-log.md](10-decisions-log.md) 2026-06-23 V1.2 #1 条目。
+
+**数据层**（~3 小时）：
+- `src/types/DiaryTypes.ts`：`DiaryRecord` 接口 + `Mood` 枚举 + `MOOD_KAOMOJI` 映射 + `MAX_NOTE_LEN = 500` 常量
+- `src/service/DatabaseService.ts`：加 `pomodoroDiary` 表 + `this.version(3).stores({ pomodoroDiary: 'id, sessionId, createdAt, updatedAt, deletedAt, syncStatus' })`
+- `src/service/DiaryDao.ts`：`get` / `getBySessionId` / `upsertBySessionId` / `softDelete` / `listAll`（导出用）/ `deleteBySessionId`（级联用）
+- `src/service/SessionDao.ts` `delete()`：硬删时追加 `await db.pomodoroDiary.where('sessionId').equals(id).delete()` 防孤儿
+- `src/service/BackupService.ts`：`CURRENT_SCHEMA_VERSION = 3`，加 `diaries: DiaryRecord[]` 字段，v2→v3 migration 注入空数组；导入 LWW
+- `src/store/preferencesStore.ts`：加 `diaryTriggerMode: 'modal' | 'card' | 'off'`（默认 `card`），`setDiaryTriggerMode`
+
+**UI 层**（~5 小时）：
+- `src/components/DiaryEditor.tsx`：共用编辑器组件
+  - props: `sessionId, taskName?, onSave, onCancel`
+  - 内部：颜文字 5 档 segment + textarea + 柔性字数（450 橙 / 500+ 红 + 禁保存）
+  - `upsertBySessionId` 落库
+- `src/components/DiaryModal.tsx`：Trigger A，AnimatePresence 全屏蒙层 + 居中卡片（reduced-motion 降级）
+- `src/components/DiaryFloatCard.tsx`：Trigger B，HomePage 右下角浮卡（休息阶段挂载）
+- `src/components/SessionTimeline.tsx`：每行加 `✎` icon，已写则填充态、未写则空心；点击弹 DiaryModal
+- `src/store/diaryQueueStore.ts`：单待写队列（`pendingSessionId: string | null`），sessionSink 推入，A/B 消费
+- `src/store/timerStore.ts` sessionSink：成就 evaluate 后 `if (newly.length > 0) setTimeout(triggerDiary, 3500) else triggerDiary()`
+- `src/pages/SettingsPage.tsx`：「番茄日记」section，触发模式 segment（弹窗 / 浮卡 / 关闭）
+
+**测试**（~1 小时）：
+- `scripts/test-diary.py`：直 IDB 注入 completed session → 切换 triggerMode 验证 A/B/C 三触发 → 字数限制（449/450/501）→ 持久化 → session 删除级联
+
+**外科手术边界**：
+- 不引入 markdown / 富文本（纯 textarea 500 字够用，准则 2）
+- 不做日记搜索 / 标签云 / 周月汇总（留后续）
+- 不改变 V1.1 已落地的成就、白噪音、时间线核心代码（仅时间线加一个补写 icon）
+- 不开「同时启用 A 和 B」（功能互斥，segment 单选，C 永远兜底）
+
+**验证**：
+- 设置 `card` → 完成番茄后休息阶段角落出现日记浮卡
+- 设置 `modal` + 同时解锁成就 → Toast 先弹满 3 秒，3.5 秒后 Modal 才弹（撞车规避）
+- 设置 `off` → 完成番茄无任何弹出；时间线补写 icon 仍可用
+- 写满 501 字 → 保存按钮禁用 + 字数标红
+- 时间线删除 session → 对应日记同时消失（级联）
+- 关 app 重开 → preferencesStore.diaryTriggerMode 持久化
 
 ---
 

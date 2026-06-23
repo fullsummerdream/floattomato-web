@@ -110,6 +110,24 @@ interface AchievementRecord {
 type AchievementId =
   | 'first-tomato' | 'ten-tomatoes' | 'fifty-tomatoes' | 'hundred-tomatoes'
   | 'focus-hour' | 'focus-day' | 'seven-day-streak' | 'early-bird'
+
+// V1.2 #1 番茄日记 — 完成番茄后写两句感想 + 5 档颜文字心情
+// 设计：独立表（不侵入 PomodoroSession schema），sessionId 外键，可级联删除
+interface DiaryRecord {
+  id: string                  // UUID
+  uid: string                 // V1.0 全为 'local'
+  sessionId: string           // 外键 → PomodoroSession.id（删除 session 时级联删此记录）
+  mood: Mood                  // 5 档心情枚举（颜文字仅前端映射，DB 存枚举防 UI 改字符不需要迁移）
+  note: string                // 文字感想，≤ 500 字（柔性限制，UI 层提示与禁保存）
+  createdAt: number
+  updatedAt: number
+  deletedAt: number | null    // 软删除
+  syncStatus: 'local' | 'syncing' | 'synced'
+}
+
+type Mood = 'sad' | 'down' | 'calm' | 'happy' | 'excited'
+// 颜文字映射在 src/types/DiaryTypes.ts MOOD_KAOMOJI 维护：
+//   sad: (´；ω；`)  down: (´・_・`)  calm: (＿ ＿)  happy: (*´∀`*)  excited: ٩(◕‿◕)۶
 ```
 
 **说明**：
@@ -130,6 +148,7 @@ class FloatTomatoDB extends Dexie {
   sessions!: Table<PomodoroSession, string>
   presets!: Table<PomodoroPreset, string>
   achievements!: Table<AchievementRecord, string>  // V1.1 #4
+  pomodoroDiary!: Table<DiaryRecord, string>       // V1.2 #1
 
   constructor() {
     super('floattomato')
@@ -141,6 +160,11 @@ class FloatTomatoDB extends Dexie {
     // V1.1 #4 成就系统 — bump 到 version(2)，新增 achievements 表，无既有数据迁移
     this.version(2).stores({
       achievements: 'id, unlockedAt'
+    })
+    // V1.2 #1 番茄日记 — bump 到 version(3)，新增 pomodoroDiary 表
+    // sessionId 索引：Trigger C「时间线补写」按 sessionId 查询是否已写，必须有索引避免全表扫
+    this.version(3).stores({
+      pomodoroDiary: 'id, sessionId, createdAt, updatedAt, deletedAt, syncStatus'
     })
   }
 }
@@ -154,6 +178,7 @@ const db = new FloatTomatoDB()
 - `tasks.archived` / `tasks.deletedAt`：任务列表过滤
 - 所有表 `updatedAt` / `syncStatus` 索引：V1.1 同步队列查询
 - `achievements.id` 主键 + `unlockedAt` 二级索引（按解锁时间排序展示用）
+- `pomodoroDiary.sessionId` 二级索引（V1.2 #1）：Trigger C 高频查询「该 session 是否已写日记」必经此索引，无索引会全表扫
 
 **版本迁移**：Dexie `version(N).stores(...).upgrade(...)`，逐版本递进（铁律 3）。V1.0 起始 version(1)，未来加字段 bump version + upgrade 函数。
 
@@ -165,14 +190,15 @@ const db = new FloatTomatoDB()
 ```typescript
 interface ExportPayload {
   app: 'FloatTomato'
-  version: string              // '1.1'
+  version: string              // '1.2'
   exportedAt: number
-  schemaVersion: 2             // V1.1 #4 bump 到 2（新增 achievements）
+  schemaVersion: 3             // V1.2 #1 bump 到 3（新增 pomodoroDiary）
   tasks: Task[]
   sessions: PomodoroSession[]
   presets: PomodoroPreset[]
   appearance: AppearanceSnapshot
   achievements: AchievementRecord[]   // V1.1 #4 — 缺省视为空数组（导入旧版兼容）
+  diaries: DiaryRecord[]              // V1.2 #1 — 缺省视为空数组（v1/v2 导入自动注入）
 }
 ```
 
@@ -235,6 +261,58 @@ interface ExportPayload {
 - 用户积累 1 年以上（>5000 条 session）可能出现轻微卡顿
 - 升级方向：新建 `statsCache` 表缓存 `total / totalSeconds / 各 byDay 行`，番茄完成时**增量更新**；仅在导入/迁移/异常时全量重算
 - 触发条件：用户反馈卡顿 或 profile 发现 evaluate > 50ms
+
+---
+
+## 番茄日记（V1.2 #1）
+
+**产品形态**：每个 `completed` work session 可选写两句感想 + 5 档颜文字心情；可关闭、可事后补写。
+
+**5 档心情**（前端 MOOD_KAOMOJI 映射，DB 仅存 `Mood` 枚举）：
+
+| Mood 枚举 | 颜文字 | 中文 |
+|---|---|---|
+| `sad` | `(´；ω；`)` | 伤心 |
+| `down` | `(´・_・`)` | 沮丧 |
+| `calm` | `(＿ ＿)` | 平静 |
+| `happy` | `(*´∀`*)` | 愉快 |
+| `excited` | `٩(◕‿◕)۶` | 兴奋 |
+
+**字数限制 — 柔性反馈**（非硬截断）：
+- 正常态：右下角灰字 `N / 500`
+- ≥ 450 字：计数变橙色提醒
+- > 500 字：保存按钮禁用 + 计数红色 + 超出字符高亮（输入不阻塞）
+
+**3 个触发点**：
+
+| 触发 | 时机 | 形态 | 默认 | 用户可关 |
+|---|---|---|---|---|
+| A · modal | `completed` work session 后 | 全屏模态（阻塞短休息开始） | 否 | 是 |
+| B · card | 进入短休息阶段后 | 角落浮卡（非阻塞） | **是** | 是 |
+| C · timeline | 任意时间 | 时间线每行「✎ 补写」icon | **永远开** | 否 |
+
+**用户设置**：`preferencesStore.diaryTriggerMode: 'modal' | 'card' | 'off'` 单选 segment（A/B/关）；C 永远兜底。
+- 选 `off`：A 和 B 都不触发；仅时间线补写可用
+- 选 `modal`：completed 后立即弹模态
+- 选 `card`：进入休息后浮卡
+
+**Toast / Modal 撞车规避**（V1.1 #4 成就 + V1.2 #1 日记并存场景）：
+- `timerStore` sessionSink 链：`SessionDao.add → evaluate achievements → if (newly.length > 0) setTimeout(triggerDiary, 3500) else triggerDiary()`
+- 3.5s = 成就 Toast 3s 自动消 + 0.5s 缓冲，让用户看清成就后再请求写日记
+- B（card）形态本身非阻塞，理论可与 Toast 共存，但同样错开以保留「成就先看清」的从容感
+
+**孤儿日记防御**（级联删除）：
+- `SessionDao.delete(sessionId)` 内须 `await db.pomodoroDiary.where('sessionId').equals(sessionId).delete()`
+- 防止删除 session 后留下永远关联不回去的日记孤儿
+- 软删除（`deletedAt` 标记）的 session 不级联删日记，保留补写入口；硬删除（用户从时间线确认删除）触发级联
+
+**幂等**：
+- 同一 sessionId 只允许一条日记记录（`DiaryDao.upsertBySessionId`，存在则更新）
+- 三个触发器内部都先 `bySessionId` 查询，已存在则进入编辑态而非新建
+
+**关闭语义**：
+- `diaryTriggerMode = 'off'` 仅关闭主动弹出；时间线补写永远可用
+- 不评估、不预渲染编辑器组件（懒加载）
 
 ---
 

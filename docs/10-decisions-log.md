@@ -221,3 +221,57 @@
 **下一步**：先文档（本条 + 04 + 06）→ 类型定义 → 服务层 → UI → 测试 → commit。
 
 ---
+
+## 2026-06-23 — V1.2 #1 番茄日记规格定档
+
+**背景**：V1.1 4 项收尾完成后启动 V1.2，按 [06-implementation-phases.md](06-implementation-phases.md) 4 子项拆解，#1 番茄日记最独立、产品风险最高（侵入计时流程），优先做。文档 [01-product-vision.md:136](01-product-vision.md) 原话只有「每个番茄结束后可选写两句感想 + 心情标签（5 档表情），可关闭」，落地前必须把交互/数据/风险细节钉死。
+
+**4 个产品拍板**：
+
+1. **触发时机**：3 触发器全要，由用户在设置 segment 中三选一（A 弹窗 / B 浮卡 / C 关闭主动弹），C「时间线补写」永远兜底
+   - 选 segment 不选 checkbox：A/B 解决同一问题（提醒写日记）只是侵入程度不同，同开属严重交互冗余违背「不打扰」铁律
+   - 默认 `card`（B，非阻塞浮卡）—— 在「不打扰」与「不被遗忘」间最平衡
+   - 选 `off` 仍保留 C 入口，保证用户永远可写
+
+2. **心情形态**：颜文字 5 档（非 emoji 表情）—— 符合极克制 + 中文友好气质
+   - DB 存 `Mood` 枚举（`sad/down/calm/happy/excited`），颜文字仅前端 `MOOD_KAOMOJI` 映射
+   - 选枚举不存字符串：未来想换成 emoji / 圆点只改前端，不需 DB migration 洗历史
+   - 选用「日系经典」一套：见 [04-data-model.md 番茄日记](04-data-model.md#番茄日记v12-1) 颜文字表
+
+3. **字数限制**：500 字（中等空间，足够一小段反思，仍不至变博客）
+
+4. **数据结构**：新建 `pomodoroDiary` 表 + `sessionId` 外键关联
+   - 选独立表不扩 `PomodoroSession.diary?`：扩 session schema 会影响 BackupService + 所有读 session 的地方都要兼容 undefined；独立表干净分离
+
+**4 个改进采纳**（来自 reviewer 反馈）：
+
+5. **Toast / Modal 撞车规避**：sessionSink 内 `if (newly.length > 0) setTimeout(triggerDiary, 3500) else triggerDiary()`
+   - 3.5s = 成就 Toast 3s 自动消 + 0.5s 缓冲，让「双喜临门」有从容感
+   - B card 形态本身非阻塞理论可与 Toast 共存，但同样错开以保留「成就先看清」语义
+
+6. **pomodoroDiary.sessionId 强制索引**：`pomodoroDiary: 'id, sessionId, createdAt, ...'`
+   - Trigger C 每行渲染都要查「该 session 是否已写」，无索引 = N 行 × 全表扫
+   - Dexie 二级索引零成本
+
+7. **柔性 500 字反馈**（非硬截断）：
+   - 正常态：右下角 `N / 500` 灰色
+   - ≥ 450：橙色提醒
+   - \> 500：保存按钮禁用 + 计数红色 + 超出字符高亮（输入不阻塞）
+   - 柔性比硬截断 UX 友好得多，实现成本仅 className 切换
+
+8. **孤儿日记防御 — 级联删除**：`SessionDao.delete()` 内追加 `await db.pomodoroDiary.where('sessionId').equals(id).delete()`
+   - 仅硬删除触发级联；软删（`deletedAt`）保留日记 + 补写入口
+   - 1 行代码避免数据库长期累积无关联孤儿
+
+**沉淀**：
+- [04-data-model.md](04-data-model.md) 新增 `DiaryRecord` 类型 + `Mood` 枚举 + Dexie `version(3)` 升级 + 「番茄日记（V1.2 #1）」专节（5 档心情/3 触发/撞车规避/级联删除/柔性字数/幂等/关闭语义）；`ExportPayload.schemaVersion` bump 至 3 并加 `diaries` 字段
+- [06-implementation-phases.md](06-implementation-phases.md) V1.2 段从「详见 01」扩写为 4 子项拆解 + #1 番茄日记完整实施清单
+
+**不沉淀**：
+- 日记墙 UI（按月/按心情聚合展示）—— V1.2 #1 只做写入与单条查看，墙留 V1.2 后续或 V2.x
+- 日记搜索 / 标签云 / 导出 markdown —— 重度功能违反极克制，留未来评估
+- 「同时启用 A 和 B」选项 —— 见拍板 1，segment 单选不开放
+
+**下一步**：本条目 + 04 + 06 三处文档 commit → 数据层（types/DB/DAO/Backup/preferences）commit → UI 三触发器 + sessionSink 集成 commit → Playwright 测试 → 不 push。
+
+---
