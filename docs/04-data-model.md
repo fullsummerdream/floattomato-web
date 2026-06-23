@@ -102,7 +102,7 @@ interface Settings {
 ```
 
 **说明**：
-- 所有表从 V1.0 起带 `updatedAt` / `deletedAt` / `syncStatus`，为 V1.1 云同步预留
+- 所有表从 V1.0 起带 `updatedAt` / `deletedAt` / `syncStatus`，为 V2.x 云同步预留
 - 所有 ID 用 UUID（时间戳前缀 + `crypto.randomUUID()`），分布式不冲突
 - `PersistedTimerState` 含 `totalSeconds`，冷启动校准用
 
