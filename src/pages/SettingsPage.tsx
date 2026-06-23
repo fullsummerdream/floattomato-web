@@ -1,6 +1,6 @@
 // 设置页 — 通知 / PWA 安装 / 数据备份 / 偏好（音效/振动/暂停限时）/ 快捷键说明
 import { useEffect, useRef, useState } from 'react'
-import { Bell, BellOff, Download, CheckCircle2, Upload, Save, Keyboard, Info, ChevronRight, Volume2, VolumeX, Play, Vibrate, Timer, Trophy } from 'lucide-react'
+import { Bell, BellOff, Download, CheckCircle2, Upload, Save, Keyboard, Info, ChevronRight, Volume2, VolumeX, Play, Vibrate, Timer, Trophy, NotebookPen } from 'lucide-react'
 import { ResponsivePage } from '@/components/ResponsivePage'
 import { notificationService } from '@/service/NotificationService'
 import { pwaService } from '@/service/PwaService'
@@ -13,6 +13,7 @@ import {
   PAUSE_LIMIT_LABELS,
   VOLUME_LABELS,
   type PauseLimitSeconds,
+  type DiaryTriggerMode,
 } from '@/store/preferencesStore'
 import { HOTKEYS } from '@/hooks/useGlobalHotkeys'
 import { Link } from 'react-router-dom'
@@ -27,9 +28,12 @@ function summarizeImport(s: ImportSummary): string {
   const t = fmt('任务', s.taskCount)
   const e = fmt('记录', s.sessionCount)
   const p = fmt('预设', s.presetCount)
+  // V1.2 #1 日记
+  const d = s.diaryCount ? fmt('日记', s.diaryCount) : null
   if (t) parts.push(t)
   if (e) parts.push(e)
   if (p) parts.push(p)
+  if (d) parts.push(d)
   // V1.1 #4 成就（如有）
   if (
     s.achievementCount &&
@@ -76,6 +80,9 @@ export function SettingsPage() {
   const setAchievementsEnabled = usePreferencesStore(
     (s) => s.setAchievementsEnabled,
   )
+  // V1.2 #1 — 番茄日记触发模式
+  const diaryTriggerMode = usePreferencesStore((s) => s.diaryTriggerMode)
+  const setDiaryTriggerMode = usePreferencesStore((s) => s.setDiaryTriggerMode)
   // 振动 API 支持检测（iOS Safari 静默降级）
   const vibrateSupported =
     typeof navigator !== 'undefined' && 'vibrate' in navigator
@@ -480,6 +487,51 @@ export function SettingsPage() {
               }`}
             />
           </button>
+        </div>
+      </section>
+
+      {/* 番茄日记（V1.2 #1） */}
+      <section className="mt-xl flex flex-col gap-md" data-testid="section-diary">
+        <h2 className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">
+          番茄日记
+        </h2>
+        <div className="flex flex-col gap-sm rounded-lg border border-neutral-200 px-md py-md dark:border-neutral-800">
+          <div className="flex items-start gap-md">
+            <NotebookPen
+              size={18}
+              className={`mt-0.5 shrink-0 ${diaryTriggerMode === 'off' ? 'text-neutral-400' : 'text-primary'}`}
+            />
+            <div className="flex-1">
+              <div className="text-sm">番茄完成后写两句感想</div>
+              <div className="mt-xs text-xs text-neutral-400">
+                关闭主动弹出后，时间线 ✎ 补写永远可用
+              </div>
+            </div>
+          </div>
+          <div className="flex overflow-hidden rounded-md border border-neutral-200 dark:border-neutral-700">
+            {(
+              [
+                { v: 'modal', label: '弹窗' },
+                { v: 'card', label: '浮卡' },
+                { v: 'off', label: '关闭' },
+              ] as { v: DiaryTriggerMode; label: string }[]
+            ).map((opt) => (
+              <button
+                key={opt.v}
+                type="button"
+                onClick={() => setDiaryTriggerMode(opt.v)}
+                aria-pressed={diaryTriggerMode === opt.v ? 'true' : 'false'}
+                data-testid={`btn-diary-mode-${opt.v}`}
+                className={`flex-1 px-md py-sm text-xs ${
+                  diaryTriggerMode === opt.v
+                    ? 'bg-primary text-surface'
+                    : 'text-neutral-600 hover:bg-neutral-50 dark:text-neutral-300 dark:hover:bg-neutral-900'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 

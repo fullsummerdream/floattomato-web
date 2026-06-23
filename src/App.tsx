@@ -6,6 +6,8 @@ import { ThemeProvider } from '@/theme/ThemeProvider'
 import { TabLayout } from '@/components/TabLayout'
 import { BackgroundCarousel } from '@/components/BackgroundCarousel'
 import { AchievementToastContainer } from '@/components/AchievementToast'
+import { DiaryModal } from '@/components/DiaryModal'
+import { DiaryFloatCard } from '@/components/DiaryFloatCard'
 import { HomePage } from '@/pages/HomePage'
 import { GlobalHotkeys } from '@/hooks/useGlobalHotkeys'
 import { useAppearanceStore } from '@/store/appearanceStore'
@@ -109,6 +111,9 @@ export default function App() {
         </Suspense>
         {/* 全局 Toast 容器 — V1.1 #4，挂载一次，监听 store */}
         <AchievementToastContainer />
+        {/* 番茄日记触发 A/B — V1.2 #1，挂载一次，按 preferences.diaryTriggerMode 自分流 */}
+        <DiaryModal />
+        <DiaryFloatCard />
       </BrowserRouter>
     </ThemeProvider>
   )

@@ -9,14 +9,16 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
-import { Check, AlertTriangle, X, Trash2 } from 'lucide-react'
+import { Check, AlertTriangle, X, Trash2, PenLine } from 'lucide-react'
 import {
   useStatsStore,
   type TimelineFilter,
   type TimelineItem,
 } from '@/store/statsStore'
 import type { SessionStatus } from '@/types/TimerTypes'
-import { pressScale, pressSpring, reducedMotion } from '@/theme/motion'
+import { DiaryDao } from '@/service/DiaryDao'
+import { DiaryEditor } from './DiaryEditor'
+import { modalIn, modalOut, pressScale, pressSpring, reducedMotion } from '@/theme/motion'
 
 const FILTERS: { value: TimelineFilter; label: string }[] = [
   { value: 'all', label: '全部' },
@@ -84,8 +86,18 @@ function statusVisual(status: SessionStatus) {
   }
 }
 
-/** 单条记录行 — 内部管理「待确认删除」短窗口状态 */
-function TimelineRow({ item }: { item: TimelineItem }) {
+/** 单条记录行 — 内部管理「待确认删除」短窗口状态 + V1.2 #1 日记补写入口 */
+function TimelineRow({
+  item,
+  hasDiary,
+  onOpenDiary,
+}: {
+  item: TimelineItem
+  /** 该 session 是否已写日记（控制 ✎ icon 填充/空心） */
+  hasDiary: boolean
+  /** 点击 ✎ → 打开日记编辑器（父组件统一管理 modal 状态） */
+  onOpenDiary: (item: TimelineItem) => void
+}) {
   const deleteSession = useStatsStore((s) => s.deleteSession)
   const [confirming, setConfirming] = useState(false)
   const timer = useRef<number | null>(null)
@@ -146,6 +158,25 @@ function TimelineRow({ item }: { item: TimelineItem }) {
         {fmtDate(item.startAt)} {fmtTime(item.startAt)} - {fmtTime(item.endAt)}
       </span>
 
+      {/* V1.2 #1 — 日记补写入口（Trigger C，永远可用，与 settings.diaryTriggerMode 无关） */}
+      <motion.button
+        type="button"
+        whileTap={reduce ? undefined : pressScale}
+        transition={reduce ? reducedMotion : pressSpring}
+        onClick={() => onOpenDiary(item)}
+        data-testid={`btn-diary-${item.id}`}
+        data-has-diary={hasDiary ? 'true' : 'false'}
+        aria-label={hasDiary ? '编辑日记' : '补写日记'}
+        title={hasDiary ? '编辑日记' : '补写日记'}
+        className={`shrink-0 rounded-md px-sm py-0.5 transition-colors ${
+          hasDiary
+            ? 'text-primary hover:bg-primary/10'
+            : 'text-neutral-400 hover:bg-neutral-100 hover:text-primary dark:hover:bg-neutral-800'
+        }`}
+      >
+        <PenLine size={14} aria-hidden fill={hasDiary ? 'currentColor' : 'none'} />
+      </motion.button>
+
       {/* 删除 */}
       <motion.button
         type="button"
@@ -177,6 +208,43 @@ export function SessionTimeline() {
   const loading = useStatsStore((s) => s.timelineLoading)
   const setFilter = useStatsStore((s) => s.setTimelineFilter)
   const loadMore = useStatsStore((s) => s.loadMoreTimeline)
+  // V1.2 #1 — 哪些 session 已有日记（控制 ✎ icon 填充/空心）
+  // 简单 N 次 getBySessionId 查询；timeline 默认 20 条 + sessionId 索引，无性能压力
+  const [diarySet, setDiarySet] = useState<Set<string>>(new Set())
+  // V1.2 #1 — 当前打开补写编辑器的 row（null = 关闭）
+  const [openItem, setOpenItem] = useState<TimelineItem | null>(null)
+  const reduce = useReducedMotion()
+
+  // timeline 变更时重查 diary 已写态（saveDiary / 切换筛选都会触发）
+  useEffect(() => {
+    let alive = true
+    const ids = timeline.map((t) => t.id)
+    Promise.all(ids.map((id) => DiaryDao.getBySessionId(id)))
+      .then((recs) => {
+        if (!alive) return
+        const next = new Set<string>()
+        recs.forEach((r, i) => {
+          if (r) next.add(ids[i])
+        })
+        setDiarySet(next)
+      })
+      .catch((err) => console.error('[Timeline/Diary] 已写态查询失败', err))
+    return () => {
+      alive = false
+    }
+  }, [timeline])
+
+  const handleDiarySaved = () => {
+    // 保存成功 → 标记该 session 已有日记 + 关闭 modal
+    if (openItem) {
+      setDiarySet((prev) => {
+        const next = new Set(prev)
+        next.add(openItem.id)
+        return next
+      })
+    }
+    setOpenItem(null)
+  }
 
   const canLoadMore = timeline.length < total
 
@@ -217,7 +285,12 @@ export function SessionTimeline() {
           <ul>
             <AnimatePresence initial={false}>
               {timeline.map((item) => (
-                <TimelineRow key={item.id} item={item} />
+                <TimelineRow
+                  key={item.id}
+                  item={item}
+                  hasDiary={diarySet.has(item.id)}
+                  onOpenDiary={setOpenItem}
+                />
               ))}
             </AnimatePresence>
           </ul>
@@ -237,6 +310,50 @@ export function SessionTimeline() {
           </div>
         )}
       </div>
+
+      {/* V1.2 #1 — Trigger C 补写编辑器（局部模态，独立于 A/B 全局队列） */}
+      <AnimatePresence>
+        {openItem && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: reduce ? reducedMotion : modalOut }}
+            transition={reduce ? reducedMotion : { duration: 0.2 }}
+            onClick={() => setOpenItem(null)}
+            data-testid="diary-timeline-backdrop"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40 p-md backdrop-blur-sm"
+          >
+            <motion.div
+              initial={
+                reduce ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.96 }
+              }
+              animate={
+                reduce ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }
+              }
+              exit={
+                reduce
+                  ? { opacity: 0, transition: reducedMotion }
+                  : { opacity: 0, y: 10, scale: 0.97, transition: modalOut }
+              }
+              transition={reduce ? reducedMotion : modalIn}
+              onClick={(e) => e.stopPropagation()}
+              data-testid="diary-timeline-modal"
+              className="w-full max-w-md rounded-2xl bg-surface p-md shadow-2xl dark:bg-surface/95"
+            >
+              <h2 className="mb-md text-base font-semibold">
+                {diarySet.has(openItem.id) ? '编辑日记' : '补写日记'}
+              </h2>
+              <DiaryEditor
+                sessionId={openItem.id}
+                taskName={openItem.taskName}
+                autoFocus
+                onSave={handleDiarySaved}
+                onCancel={() => setOpenItem(null)}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   )
 }

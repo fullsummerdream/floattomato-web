@@ -11,6 +11,8 @@ import { ensureDefaultPreset } from '@/service/DatabaseService'
 import { achievementService } from '@/service/AchievementService'
 import { useAchievementToastStore } from '@/store/achievementToastStore'
 import { usePreferencesStore } from '@/store/preferencesStore'
+import { useDiaryQueueStore } from '@/store/diaryQueueStore'
+import { TaskDao } from '@/service/TaskDao'
 import type { TimerRuntimeState, TimerPhase } from '@/types/TimerTypes'
 
 interface TimerStoreState {
@@ -38,7 +40,8 @@ export const PHASE_LABELS: Record<TimerPhase, string> = {
 // ---------- 接线：注入持久化与会话 sink ----------
 timerService.setPersistence((s) => PersistenceService.saveTimerState(s))
 // 番茄完成 → 自动写 PomodoroSession 入库（fire-and-forget，不阻塞 UI）
-// 入库完成后串联成就评估 → toast（保证 evaluate 能读到刚写入的 session）
+// 入库完成后串联成就评估 → toast → 日记触发（V1.2 #1）
+// 撞车规避：有新成就则 3.5s 后再触发日记，否则立即（让用户看清成就 toast）
 timerService.setSessionSink((session) => {
   SessionDao.add({
     taskId: session.taskId,
@@ -50,18 +53,39 @@ timerService.setSessionSink((session) => {
     status: session.status,
     presetId: session.presetId,
   })
-    .then(() => {
+    .then(async (savedSession) => {
       // V1.1 #4 — 仅 completed 触发成就评估，开关关时静默
       if (session.status !== 'completed') return
       const enabled = usePreferencesStore.getState().achievementsEnabled
-      if (!enabled) return
-      return achievementService.evaluate().then((newly) => {
+      let newlyCount = 0
+      if (enabled) {
+        const newly = await achievementService.evaluate()
         if (newly.length > 0) {
           useAchievementToastStore.getState().push(newly)
+          newlyCount = newly.length
         }
-      })
+      }
+      // V1.2 #1 — 日记触发：mode === 'off' 不弹；否则按撞车规避入队
+      const mode = usePreferencesStore.getState().diaryTriggerMode
+      if (mode === 'off') return
+      // 查任务名供编辑器顶部显示（无任务返回 undefined，editor 隐藏 taskName 行）
+      const taskName = savedSession.taskId
+        ? (await TaskDao.get(savedSession.taskId))?.name
+        : undefined
+      const enqueueDiary = () => {
+        useDiaryQueueStore.getState().enqueue({
+          sessionId: savedSession.id,
+          taskName,
+        })
+      }
+      if (newlyCount > 0) {
+        // 成就 toast 3s 自动消 + 0.5s 缓冲，让「双喜临门」有从容感
+        window.setTimeout(enqueueDiary, 3500)
+      } else {
+        enqueueDiary()
+      }
     })
-    .catch((err) => console.error('[SessionDao/Achievement] 写入/评估失败', err))
+    .catch((err) => console.error('[SessionDao/Achievement/Diary] 链失败', err))
 })
 
 // 应用启动：初始化默认预设（幂等），随后把上次激活的预设注入 TimerService
