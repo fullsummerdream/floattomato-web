@@ -127,13 +127,14 @@ export function DiaryEditor({
                 onClick={() => setMood(m)}
                 data-testid={`diary-mood-${m}`}
                 data-selected={selected}
-                className={`flex-1 rounded-lg border px-xs py-sm text-center text-base transition-colors ${
+                className={`flex flex-1 flex-col items-center gap-0.5 rounded-lg border px-xs py-sm text-center transition-colors ${
                   selected
                     ? 'border-primary bg-primary/10 text-primary'
                     : 'border-neutral-200 text-neutral-500 hover:border-neutral-300 dark:border-neutral-700 dark:text-neutral-400 dark:hover:border-neutral-600'
                 }`}
               >
-                <span className="font-mono">{MOOD_KAOMOJI[m]}</span>
+                <span className="font-mono text-base leading-none">{MOOD_KAOMOJI[m]}</span>
+                <span className="text-[10px] leading-tight">{MOOD_LABEL[m]}</span>
               </motion.button>
             )
           })}
