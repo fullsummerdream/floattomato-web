@@ -275,3 +275,52 @@
 **下一步**：本条目 + 04 + 06 三处文档 commit → 数据层（types/DB/DAO/Backup/preferences）commit → UI 三触发器 + sessionSink 集成 commit → Playwright 测试 → 不 push。
 
 ---
+
+## 2026-06-24 — V1.2 #2 多轨混音底座：WhiteNoiseService 内部转 Web Audio API
+
+**背景**：V1.2 #3（多轨混音 UI + AnalyserNode 频谱）需要 (a) 多个独立音轨同时播放，(b) 接 AnalyserNode 抓波形。HTML5 `<audio>` 一个元素一个轨且不能精确挂分析节点，必须先把 WhiteNoiseService 底层迁到 Web Audio。
+
+**关键拍板**：
+
+1. **走 `AudioBufferSourceNode` 路线（fetch + decodeAudioData + buffer 缓存）**
+   - 否决「`<audio>` + `MediaElementAudioSourceNode`」最小包装方案 —— 该方案仍是「一轨一 audio 元素」，#3 多轨混音时要么改成多元素（开销大）要么再翻一次，不如一次到位
+   - `BufferSourceNode` 是 one-shot（start 一次 stop 后实例报废）—— 每次 setTrack 创建新实例 + connect 到 master gain；旧 source 立即 stop + disconnect
+   - `buffer` 解码后缓存到 `Map<TrackId, AudioBuffer>`，二次切回同一音轨 < 300ms 出 playing（实测）
+
+2. **保持单轨行为不变 — 对外 API 一字不改**
+   - `setTrack / setVolume / stop / subscribe / getState / WhiteNoiseState` 类型签名与语义完全一致
+   - `WhiteNoiseBar.tsx` + `preferencesStore.ts` 零修改 —— 是「零功能回归」的硬指标
+   - 这样 #2 commit 可独立回滚，不牵连任何上层
+
+3. **不复用 `AudioService.ctx`（提示音的 AudioContext）**
+   - 提示音与白噪音生命周期独立（提示音 one-shot ms 级，白噪音长循环），共享 ctx 在 #3 加 master ⇄ sub-gain 拓扑时反而要拆
+   - 当前各开各的 AudioContext，开销可忽略（每个 ~30KB），#3 真要做 master 总线时再抽
+
+4. **音量过渡走 `setTargetAtTime(target, now, 0.005)` 5ms 软过渡**
+   - 直接 `gain.value = x` 会产生 click 杂音（数字突变）
+   - 5ms 时间常数对人耳不可感，但消除了 click
+
+5. **过期 load 回调防御 — `currentLoadToken` 单调递增**
+   - 用户快速 cafe → rain-light → cafe 时，cafe 第一次的 decodeAudioData 回调可能晚于 rain-light 启播
+   - 每次 setTrack/stop 自增 token，load 完成时 token 不匹配 → 丢弃；杜绝「我已经切走了你还给我 start」的竞态
+
+6. **404 / decode 失败 → `status: 'missing'`**
+   - 行为与上一版一致（用户没跑 `npm run fetch-audio` 时 chip 灰显 + 提示）
+   - 实现路径变了：上一版靠 `<audio>` error 事件 + 守卫；新版 fetch 返回 !ok 或 decodeAudioData reject 直接 emit
+
+**沉淀（代码）**：
+- [src/service/WhiteNoiseService.ts](../src/service/WhiteNoiseService.ts) 整文件重写（外部 API 不变）
+- [scripts/test-whitenoise.py](../scripts/test-whitenoise.py) 新增 12 项冒烟（idle/loading/playing/切轨/音量/停止/缓存复用/无 console error）
+
+**不沉淀（文档保持现状）**：
+- [04-data-model.md](04-data-model.md) 不动 —— 数据模型零变化
+- [06-implementation-phases.md](06-implementation-phases.md) #2 任务描述已是「保持单轨行为不变」，落地匹配文档，无需修订
+
+**回归验证**：
+- 新增 `test-whitenoise.py` 12 PASS
+- `test-achievements.py` + `test-timeline.py` 回归 PASS
+- 浏览器手测（headless chromium with `--autoplay-policy=no-user-gesture-required`）：4 组 chips（雨/自然/环境/噪音）切换流畅、音量滑块响应、停止干净
+
+**下一步**：commit → 等用户决定是否进 V1.2 #3（多轨混音 UI + AnalyserNode 频谱可视化）
+
+---
