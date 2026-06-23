@@ -6,7 +6,7 @@ import { Info, Github, Shield, FileText, ExternalLink, type LucideIcon } from 'l
 import { ResponsivePage } from '@/components/ResponsivePage'
 
 const APP_VERSION = '0.1.0' // 与 package.json / BackupService.appVersion 保持一致
-const REPO_URL = 'https://github.com/'
+const REPO_URL = 'https://github.com/fullsummerdream/floattomato-web'
 
 type TabKey = 'about' | 'privacy' | 'terms'
 

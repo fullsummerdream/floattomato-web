@@ -4,6 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "description": "飘悠番茄 Web — 极简专注计时 PWA",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fullsummerdream/floattomato-web.git"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
