@@ -7,6 +7,7 @@ import type {
   PomodoroPreset,
 } from '@/types/TimerTypes'
 import type { AchievementRecord } from '@/types/AchievementTypes'
+import type { DiaryRecord } from '@/types/DiaryTypes'
 import { DEFAULT_PRESET } from '@/service/presetConstants'
 
 export { DEFAULT_PRESET }
@@ -17,6 +18,8 @@ class FloatTomatoDB extends Dexie {
   presets!: Table<PomodoroPreset, string>
   // V1.1 #4 — 表中存在即解锁，无未解锁行
   achievements!: Table<AchievementRecord, string>
+  // V1.2 #1 — 番茄日记，sessionId 外键关联 PomodoroSession
+  pomodoroDiary!: Table<DiaryRecord, string>
 
   constructor() {
     super('floattomato')
@@ -30,6 +33,11 @@ class FloatTomatoDB extends Dexie {
     // V1.1 #4 — 新增 achievements 表，无既有数据迁移
     this.version(2).stores({
       achievements: 'id, unlockedAt',
+    })
+    // V1.2 #1 — 新增 pomodoroDiary 表
+    // sessionId 二级索引：Trigger C「时间线补写」按 sessionId 查询是否已写，必须有索引避免全表扫
+    this.version(3).stores({
+      pomodoroDiary: 'id, sessionId, createdAt, updatedAt, deletedAt, syncStatus',
     })
   }
 }

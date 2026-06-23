@@ -1,6 +1,7 @@
 // SessionDao — 番茄记录 CRUD + 按区间/任务聚合查询
 // 依 docs/04-data-model.md（sessions.startAt 主索引）+ docs/06 阶段 2 统计需求
 import { db, genId } from './DatabaseService'
+import { DiaryDao } from './DiaryDao'
 import type { PomodoroSession, SessionStatus } from '@/types/TimerTypes'
 
 const NOW = () => Date.now()
@@ -144,5 +145,16 @@ export const SessionDao = {
   async softDelete(id: string): Promise<void> {
     const now = NOW()
     await db.sessions.update(id, { deletedAt: now, updatedAt: now })
+  },
+
+  /**
+   * 硬删除 — 物理删除 + 级联清理子表（V1.2 #1 日记防孤儿）
+   * 当前 UI 仅走 softDelete；本方法预留给未来「清理墓碑」/「彻底删除」入口
+   * 软删的 session 仍保留日记补写入口（依 docs/04「软删不级联」铁律）
+   */
+  async hardDelete(id: string): Promise<void> {
+    // 级联：先删日记子表，再删 session 主行（顺序错乱也无副作用，只是个一致性偏好）
+    await DiaryDao.deleteBySessionId(id)
+    await db.sessions.delete(id)
   },
 }

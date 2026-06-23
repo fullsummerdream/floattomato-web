@@ -13,6 +13,13 @@ export const PAUSE_LIMIT_OPTIONS = [30, 60, 180, 300, 0] as const
 /** 0 = 不限时 */
 export type PauseLimitSeconds = (typeof PAUSE_LIMIT_OPTIONS)[number]
 
+/** 番茄日记触发模式（V1.2 #1）
+ *  - modal：完成番茄后立即弹模态（阻塞短休息开始）
+ *  - card：进入短休息后角落浮卡（非阻塞，默认）
+ *  - off：A 和 B 都不触发；时间线补写永远可用（C 不受此控制）
+ */
+export type DiaryTriggerMode = 'modal' | 'card' | 'off'
+
 export interface PreferencesState {
   /** 音量档位 0=静音 1=低 2=中 3=高 */
   volume: VolumeLevel
@@ -26,12 +33,15 @@ export interface PreferencesState {
   whitenoiseTrack: TrackId | null
   /** 成就反馈开关（V1.1 #4）— 关后不评估、不弹 toast；成就墙仍可查阅 */
   achievementsEnabled: boolean
+  /** 番茄日记触发模式（V1.2 #1）— 默认 card；off 仅关 A/B，C 时间线补写永远可用 */
+  diaryTriggerMode: DiaryTriggerMode
   setVolume: (v: VolumeLevel) => void
   setVibrate: (on: boolean) => void
   setPauseLimit: (s: PauseLimitSeconds) => void
   setWhitenoiseVolume: (v: number) => void
   setWhitenoiseTrack: (id: TrackId | null) => void
   setAchievementsEnabled: (on: boolean) => void
+  setDiaryTriggerMode: (m: DiaryTriggerMode) => void
 }
 
 export const usePreferencesStore = create<PreferencesState>()(
@@ -43,6 +53,7 @@ export const usePreferencesStore = create<PreferencesState>()(
       whitenoiseVolume: 60,
       whitenoiseTrack: null,
       achievementsEnabled: true,
+      diaryTriggerMode: 'card',
       setVolume: (volume) => {
         audioService.volume = volume
         set({ volume })
@@ -65,6 +76,7 @@ export const usePreferencesStore = create<PreferencesState>()(
         set({ whitenoiseTrack: id })
       },
       setAchievementsEnabled: (on) => set({ achievementsEnabled: on }),
+      setDiaryTriggerMode: (m) => set({ diaryTriggerMode: m }),
     }),
     {
       name: 'floattomato:preferences',
