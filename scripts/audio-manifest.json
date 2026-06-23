@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "description": "白噪音音轨清单 — 用 npm run fetch-audio 一次性下载；不进 git",
+  "license": "Mixkit Sound Effects Free License — https://mixkit.co/license/#sfxFree（免费免商用免署名）",
+  "outputDir": "public/audio",
+  "tracks": [
+    { "file": "rain-light.mp3",  "url": "https://assets.mixkit.co/active_storage/sfx/1225/1225-preview.mp3" },
+    { "file": "rain-medium.mp3", "url": "https://assets.mixkit.co/active_storage/sfx/1242/1242-preview.mp3" },
+    { "file": "rain-storm.mp3",  "url": "https://assets.mixkit.co/active_storage/sfx/1262/1262-preview.mp3" },
+    { "file": "thunder.mp3",     "url": "https://assets.mixkit.co/active_storage/sfx/1258/1258-preview.mp3" },
+    { "file": "ocean.mp3",       "url": "https://assets.mixkit.co/active_storage/sfx/1183/1183-preview.mp3" },
+    { "file": "stream.mp3",      "url": "https://assets.mixkit.co/active_storage/sfx/1010/1010-preview.mp3" },
+    { "file": "forest.mp3",      "url": "https://assets.mixkit.co/active_storage/sfx/1210/1210-preview.mp3" },
+    { "file": "fire.mp3",        "url": "https://assets.mixkit.co/active_storage/sfx/1326/1326-preview.mp3" },
+    { "file": "wind.mp3",        "url": "https://assets.mixkit.co/active_storage/sfx/1157/1157-preview.mp3" },
+    { "file": "cafe.mp3",        "url": "https://assets.mixkit.co/active_storage/sfx/2505/2505-preview.mp3" },
+    { "file": "library.mp3",     "url": "https://assets.mixkit.co/active_storage/sfx/1012/1012-preview.mp3" },
+    { "file": "train.mp3",       "url": "https://assets.mixkit.co/active_storage/sfx/1318/1318-preview.mp3" },
+    { "file": "white-noise.mp3", "url": "https://assets.mixkit.co/active_storage/sfx/1041/1041-preview.mp3" },
+    { "file": "pink-noise.mp3",  "url": "https://assets.mixkit.co/active_storage/sfx/1177/1177-preview.mp3" },
+    { "file": "brown-noise.mp3", "url": "https://assets.mixkit.co/active_storage/sfx/1209/1209-preview.mp3" }
+  ]
+}

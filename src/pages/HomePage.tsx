@@ -9,6 +9,7 @@ import { ResponsivePage } from '@/components/ResponsivePage'
 import { MaterialBox } from '@/components/MaterialBox'
 import { TimerRing } from '@/components/TimerRing'
 import { TimerDigits } from '@/components/TimerDigits'
+import { WhiteNoiseBar } from '@/components/WhiteNoiseBar'
 import { useVisibilityCalibration } from '@/hooks/useVisibilityCalibration'
 import { useViewTransition } from '@/hooks/useViewTransition'
 import {
@@ -216,6 +217,9 @@ export function HomePage() {
         >
           <Maximize2 size={12} /> 进入全屏模式
         </button>
+
+        {/* V1.1 白噪音音轨 — 独立于番茄状态（docs/06 V1.1 #2） */}
+        <WhiteNoiseBar />
 
         {/* 休息阶段提示 */}
         {isBreak && (

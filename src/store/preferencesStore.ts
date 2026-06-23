@@ -1,10 +1,12 @@
-// 偏好行为状态 — 音效音量 / 振动 / 暂停限时
+// 偏好行为状态 — 音效音量 / 振动 / 暂停限时 / 白噪音
 // 与外观分离：appearanceStore = 视觉，preferencesStore = 行为
 // 持久化 localStorage key: floattomato:preferences
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { audioService, type VolumeLevel } from '@/service/AudioService'
 import { timerService } from '@/service/TimerService'
+import { whiteNoiseService } from '@/service/WhiteNoiseService'
+import type { TrackId } from '@/service/whitenoiseTracks'
 
 /** 暂停限时档位（秒） */
 export const PAUSE_LIMIT_OPTIONS = [30, 60, 180, 300, 0] as const
@@ -18,9 +20,15 @@ export interface PreferencesState {
   vibrateEnabled: boolean
   /** 暂停限时（秒，0 = 不限） */
   pauseLimit: PauseLimitSeconds
+  /** 白噪音音量 0-100（与提示音独立） */
+  whitenoiseVolume: number
+  /** 上次选中的白噪音音轨（持久化；刷新后 UI 显示选中态，但不自动播放：浏览器策略需手势） */
+  whitenoiseTrack: TrackId | null
   setVolume: (v: VolumeLevel) => void
   setVibrate: (on: boolean) => void
   setPauseLimit: (s: PauseLimitSeconds) => void
+  setWhitenoiseVolume: (v: number) => void
+  setWhitenoiseTrack: (id: TrackId | null) => void
 }
 
 export const usePreferencesStore = create<PreferencesState>()(
@@ -29,6 +37,8 @@ export const usePreferencesStore = create<PreferencesState>()(
       volume: 2,
       vibrateEnabled: true,
       pauseLimit: 300,
+      whitenoiseVolume: 60,
+      whitenoiseTrack: null,
       setVolume: (volume) => {
         audioService.volume = volume
         set({ volume })
@@ -42,16 +52,25 @@ export const usePreferencesStore = create<PreferencesState>()(
         timerService.pauseLimitUnlimited = pauseLimit === 0
         set({ pauseLimit })
       },
+      setWhitenoiseVolume: (v) => {
+        whiteNoiseService.setVolume(v)
+        set({ whitenoiseVolume: v })
+      },
+      setWhitenoiseTrack: (id) => {
+        whiteNoiseService.setTrack(id)
+        set({ whitenoiseTrack: id })
+      },
     }),
     {
       name: 'floattomato:preferences',
-      // hydration 后把值灌进 service 单例
+      // hydration 后把值灌进 service 单例（不自动播放：浏览器策略需用户手势）
       onRehydrateStorage: () => (state) => {
         if (!state) return
         audioService.volume = state.volume
         audioService.vibrateEnabled = state.vibrateEnabled
         timerService.pauseLimit = state.pauseLimit
         timerService.pauseLimitUnlimited = state.pauseLimit === 0
+        whiteNoiseService.setVolume(state.whitenoiseVolume)
       },
     },
   ),

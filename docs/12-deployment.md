@@ -8,11 +8,23 @@
 ## 一、构建产物
 
 ```bash
-npm ci          # 装依赖
-npm run build   # 出包到 dist/
+npm ci             # 装依赖
+npm run fetch-audio # 下载白噪音音轨（首次必跑；详见下方「音频资源」）
+npm run build      # 出包到 dist/
 ```
 
 `dist/` 体积 ~511KB（precache），首屏 gzip ~50KB。所有路由懒加载、静态资源带 hash。
+
+### 音频资源（V1.1）
+
+V1.1 引入 15 段白噪音音轨（雨/自然/环境/噪音 4 组）。出于 license 风险考虑，**音频文件不进 git**：
+
+- 清单：[`scripts/audio-manifest.json`](../scripts/audio-manifest.json)
+- 下载：`npm run fetch-audio` 自动并发下载到 `public/audio/`（~5MB，并发 4，幂等）
+- License：Mixkit Sound Effects Free License（免费免商用免署名）
+- 音频走 PWA runtime cache（首次播放后离线可用），不进 precache（5MB 拖慢首屏）
+
+> 没跑 `npm run fetch-audio` 也不影响应用启动 — 白噪音 chip 点击会显示「音轨缺失：xxx」提示。
 
 ---
 

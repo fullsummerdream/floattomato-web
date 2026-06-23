@@ -75,6 +75,19 @@ export default defineConfig({
               },
             },
           },
+          {
+            // 白噪音音轨 — 首次播放后永久离线可用（音轨不进 precache，5MB 拖慢首屏）
+            urlPattern: ({ url }) => url.pathname.startsWith('/audio/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'whitenoise-audio',
+              expiration: {
+                maxEntries: 30,
+                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 年
+              },
+              rangeRequests: true, // 支持 audio seek
+            },
+          },
         ],
         cleanupOutdatedCaches: true,
       },
