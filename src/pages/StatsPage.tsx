@@ -1,8 +1,9 @@
-// StatsPage — 今日/本周/本月/总计 四档 + 任务分布 + 365 格热力图
-// 依 docs/06 阶段 2 任务 5 + 阶段 5 任务 1（FocusHeatmap）
+// StatsPage — 今日/本周/本月/总计 四档 + 任务分布 + 365 格热力图 + 最近记录时间线
+// 依 docs/06 阶段 2 任务 5 + 阶段 5 任务 1（FocusHeatmap）+ V1.1 #3 时间线
 import { useEffect, useState } from 'react'
 import { ResponsivePage } from '@/components/ResponsivePage'
 import { FocusHeatmap } from '@/components/FocusHeatmap'
+import { SessionTimeline } from '@/components/SessionTimeline'
 import { useStatsStore, type StatsRange } from '@/store/statsStore'
 import { useHeatmapData, type HeatmapRange } from '@/hooks/useHeatmapData'
 
@@ -193,6 +194,11 @@ export function StatsPage() {
             )}
           </div>
         </section>
+      </div>
+
+      {/* V1.1 #3 最近记录时间线 — 跟随上方区间，独立状态筛选与软删除 */}
+      <div className="mt-3xl">
+        <SessionTimeline />
       </div>
     </ResponsivePage>
   )

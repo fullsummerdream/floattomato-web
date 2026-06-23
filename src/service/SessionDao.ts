@@ -107,4 +107,42 @@ export const SessionDao = {
       })
     return map
   },
+
+  /**
+   * 时间线分页查询 — 按 startAt 倒序，支持区间 + 状态筛选
+   * 注：startAt 索引 desc 走 reverse().sortBy 不可用（Dexie 限制），
+   * 用 toArray() + sort，量级（百-千条）下 OK；超大量后续可改 cursor 分页
+   */
+  async queryRecent(opts: {
+    /** 起始 ts（包含），undefined = 不限 */
+    start?: number
+    /** 结束 ts（包含），undefined = 不限 */
+    end?: number
+    /** 状态白名单；空数组 / undefined = 全部 */
+    statuses?: SessionStatus[]
+    /** offset（已加载条数） */
+    offset: number
+    /** 单次条数 */
+    limit: number
+  }): Promise<{ items: PomodoroSession[]; total: number }> {
+    const base =
+      opts.start !== undefined && opts.end !== undefined
+        ? await this.queryByRange(opts.start, opts.end)
+        : await this.queryAll()
+    const filtered =
+      opts.statuses && opts.statuses.length > 0
+        ? base.filter((s) => opts.statuses!.includes(s.status))
+        : base
+    const sorted = filtered.sort((a, b) => b.startAt - a.startAt)
+    return {
+      items: sorted.slice(opts.offset, opts.offset + opts.limit),
+      total: sorted.length,
+    }
+  },
+
+  /** 软删除（写墓碑，统计聚合自动剔除） */
+  async softDelete(id: string): Promise<void> {
+    const now = NOW()
+    await db.sessions.update(id, { deletedAt: now, updatedAt: now })
+  },
 }
