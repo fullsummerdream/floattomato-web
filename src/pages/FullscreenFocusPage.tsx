@@ -12,6 +12,7 @@ import { X, Pause, Play, SkipForward } from 'lucide-react'
 import { MaterialBox } from '@/components/MaterialBox'
 import { TimerRing } from '@/components/TimerRing'
 import { TimerDigits } from '@/components/TimerDigits'
+import { Spectrum } from '@/components/Spectrum'
 import { useViewTransition } from '@/hooks/useViewTransition'
 import { useVisibilityCalibration } from '@/hooks/useVisibilityCalibration'
 import { focusService } from '@/service/FocusService'
@@ -191,6 +192,14 @@ export function FullscreenFocusPage() {
           </button>
         )}
       </motion.div>
+
+      {/* V1.2 #3 — 真实音频频谱，固定底部叠加（无激活轨时画静态零线占位） */}
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-0 px-md pb-md"
+        data-testid="focus-spectrum"
+      >
+        <Spectrum height={64} />
+      </div>
     </div>
   )
 }

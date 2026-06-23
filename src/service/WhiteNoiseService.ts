@@ -1,22 +1,41 @@
-// WhiteNoiseService — 白噪音 / 专注音轨播放（Web Audio API 单轨）
-// 依 docs/06 V1.2 #2 多轨混音底座：HTML5 audio → Web Audio API 重写
+// WhiteNoiseService — 白噪音 / 专注音轨混音（V1.2 #3 多轨 + AnalyserNode）
+// 依 docs/06 V1.2 #3：在 #2 Web Audio 底座上扩多轨混音 + 频谱接入点
 //
 // 设计要点：
-// - 单 master GainNode 控音量；每次 setTrack 创建一个新的 BufferSourceNode（一次性 + loop=true）
-// - 通过 fetch + decodeAudioData 把每条 track 解码缓存到 bufferCache，二次切回秒级响应
-// - 加载失败 / decode 失败 / 404 → emit 'missing' 态
-// - 浏览器手势策略：ctx.state==='suspended' 走 resume；NotAllowedError 由 AudioContext 内部消化
-// - 对外 API 与上一版完全一致（setTrack / setVolume / stop / subscribe / getState），UI/store 零改动
-// - 不复用 AudioService.ctx（避免提示音/白噪音耦合）；V1.2 #3 真做多轨混音时再抽 master ctx
+// - 内部以 Map<TrackId, ActiveTrack> 维护已激活音轨；每条独立 BufferSourceNode + GainNode
+// - master GainNode 控总音量；master → AnalyserNode（旁路）→ destination
+// - AnalyserNode 长期存在（lazy 创建），Spectrum 组件按需取数据
+// - 对外保留旧 API（setTrack/setVolume/stop）作为 deprecated wrapper；
+//   新 API：addTrack / removeTrack / setTrackVolume / getMix / getAnalyser
+// - bufferCache 沿用 #2，多轨切换零额外解码开销
 
 import { TRACKS, type TrackId } from './whitenoiseTracks'
 
 export type WhiteNoiseStatus = 'idle' | 'loading' | 'playing' | 'missing' | 'error'
 
+export interface MixTrackState {
+  trackId: TrackId
+  /** per-track 音量 0-100 */
+  volume: number
+  status: 'loading' | 'playing' | 'missing' | 'error'
+}
+
 export interface WhiteNoiseState {
-  trackId: TrackId | null
-  volume: number // 0-100
-  status: WhiteNoiseStatus
+  /** 当前激活的混音条目（顺序 = 添加顺序，用于 UI 列表稳定） */
+  mix: MixTrackState[]
+  /** 全局总音量 0-100（master gain） */
+  masterVolume: number
+  /** 派生：是否有任一轨在播 —— UI 用来判断是否显示状态条 */
+  isPlaying: boolean
+}
+
+interface ActiveTrack {
+  source: AudioBufferSourceNode | null
+  gain: GainNode
+  volume: number
+  status: 'loading' | 'playing' | 'missing' | 'error'
+  /** 用于丢弃过期 load 回调 */
+  loadToken: number
 }
 
 type Listener = (s: WhiteNoiseState) => void
@@ -24,21 +43,15 @@ type Listener = (s: WhiteNoiseState) => void
 class WhiteNoiseService {
   private ctx: AudioContext | null = null
   private masterGain: GainNode | null = null
-  private source: AudioBufferSourceNode | null = null
-  /** 解码后 AudioBuffer 缓存（id → buffer），二次切回同一音轨无需重新 fetch/decode */
+  private analyser: AnalyserNode | null = null
+  private active = new Map<TrackId, ActiveTrack>()
+  /** AudioBuffer 解码缓存（id → buffer），二次激活同一轨直接复用 */
   private bufferCache = new Map<TrackId, AudioBuffer>()
-  /** 进行中的 load Promise，避免同一 track 重复并发请求 */
   private loadingPromise = new Map<TrackId, Promise<AudioBuffer | null>>()
-  /** 用于忽略「旧 load 完成时新 track 已切走」的过期回调 */
-  private currentLoadToken = 0
   private listeners = new Set<Listener>()
-  private state: WhiteNoiseState = {
-    trackId: null,
-    volume: 60,
-    status: 'idle',
-  }
+  private masterVolume = 60
 
-  /** 确保 AudioContext + master gain 就绪（首次用户手势触发） */
+  /** 确保 AudioContext + master + Analyser 就绪（首次用户手势触发） */
   private ensureCtx(): AudioContext | null {
     if (typeof window === 'undefined') return null
     if (!this.ctx) {
@@ -49,10 +62,15 @@ class WhiteNoiseService {
       if (!AC) return null
       this.ctx = new AC()
       this.masterGain = this.ctx.createGain()
-      this.masterGain.gain.value = this.state.volume / 100
-      this.masterGain.connect(this.ctx.destination)
+      this.masterGain.gain.value = this.masterVolume / 100
+      // analyser 拓扑：master → analyser → destination
+      // fftSize 256 → 频域 128 bin，64 柱可视化用前半段（人耳敏感低中频）
+      this.analyser = this.ctx.createAnalyser()
+      this.analyser.fftSize = 256
+      this.analyser.smoothingTimeConstant = 0.75
+      this.masterGain.connect(this.analyser)
+      this.analyser.connect(this.ctx.destination)
     }
-    // 浏览器策略：suspended 状态需 resume（用户手势上下文中安全调用）
     if (this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {
         /* noop — 没手势就 resume 不动，下次手势再触发 */
@@ -67,16 +85,27 @@ class WhiteNoiseService {
     return () => this.listeners.delete(fn)
   }
 
-  private update(patch: Partial<WhiteNoiseState>) {
-    this.state = { ...this.state, ...patch }
-    this.listeners.forEach((fn) => fn(this.state))
+  private emit() {
+    const s = this.getState()
+    this.listeners.forEach((fn) => fn(s))
   }
 
   getState(): WhiteNoiseState {
-    return this.state
+    const mix: MixTrackState[] = []
+    this.active.forEach((a, trackId) => {
+      mix.push({ trackId, volume: a.volume, status: a.status })
+    })
+    const isPlaying = mix.some((m) => m.status === 'playing')
+    return { mix, masterVolume: this.masterVolume, isPlaying }
   }
 
-  /** 加载 + 解码一条 track 到 buffer（命中缓存直接返回） */
+  /** 提供给 Spectrum 组件做频谱可视化（mix 空时仍存在，画零线即可） */
+  getAnalyser(): AnalyserNode | null {
+    // 不在此触发 ensureCtx —— 没用户手势时强建 AudioContext 会被浏览器警告
+    return this.analyser
+  }
+
+  /** 加载 + 解码一条 track 到 AudioBuffer（命中缓存直接返回） */
   private async loadBuffer(track: { id: TrackId; src: string }): Promise<AudioBuffer | null> {
     const cached = this.bufferCache.get(track.id)
     if (cached) return cached
@@ -89,9 +118,8 @@ class WhiteNoiseService {
     const p = (async () => {
       try {
         const resp = await fetch(track.src)
-        if (!resp.ok) return null // 404 = 用户未下载
+        if (!resp.ok) return null
         const arr = await resp.arrayBuffer()
-        // decodeAudioData 兼容 Safari 老 callback 形态：用 Promise 包一层
         const buffer = await new Promise<AudioBuffer>((resolve, reject) => {
           ctx.decodeAudioData(arr, resolve, reject)
         })
@@ -107,79 +135,118 @@ class WhiteNoiseService {
     return p
   }
 
-  /** 停掉当前 source（不动 ctx / masterGain，复用） */
-  private stopSource() {
-    if (this.source) {
-      try {
-        this.source.stop()
-      } catch {
-        /* 未启动的 source stop 会抛 InvalidStateError，忽略 */
-      }
-      this.source.disconnect()
-      this.source = null
-    }
-  }
+  // ============ V1.2 #3 新 API ============
 
-  /** 切到指定音轨；传 null 则停止 */
-  setTrack(trackId: TrackId | null) {
-    if (trackId === null) {
-      this.stop()
-      return
-    }
+  /** 加入一条 track 到混音；若已在 mix 中则 no-op */
+  addTrack(trackId: TrackId, initialVolume = 80) {
+    if (this.active.has(trackId)) return
     const track = TRACKS.find((t) => t.id === trackId)
     if (!track) return
-
     const ctx = this.ensureCtx()
     if (!ctx || !this.masterGain) return
 
-    // 同一音轨已在播 → no-op
-    if (this.state.trackId === trackId && this.source) return
+    const gain = ctx.createGain()
+    gain.gain.value = initialVolume / 100
+    gain.connect(this.masterGain)
 
-    // 切轨：停旧 source，进 loading 态
-    this.stopSource()
-    this.update({ trackId, status: 'loading' })
-    const token = ++this.currentLoadToken
+    const entry: ActiveTrack = {
+      source: null,
+      gain,
+      volume: initialVolume,
+      status: 'loading',
+      loadToken: 0,
+    }
+    this.active.set(trackId, entry)
+    this.emit()
 
+    const token = ++entry.loadToken
     void this.loadBuffer(track).then((buffer) => {
-      // 过期 token：用户已切走或停掉，丢弃本次结果
-      if (token !== this.currentLoadToken) return
+      // 过期检查：可能已 removeTrack
+      const current = this.active.get(trackId)
+      if (!current || current.loadToken !== token) return
       if (!buffer) {
-        this.update({ status: 'missing' })
+        current.status = 'missing'
+        this.emit()
         return
       }
-      // 此处可能 ensureCtx 后 ctx 仍 suspended（无手势），不阻塞 start——
-      // start 在 suspended ctx 上排队，resume 后会接着播；不需特殊处理。
       const src = ctx.createBufferSource()
       src.buffer = buffer
       src.loop = true
-      src.connect(this.masterGain!)
+      src.connect(current.gain)
       try {
         src.start(0)
       } catch {
-        // start 已被调用过的极端竞态：直接当 error
-        this.update({ status: 'error' })
+        current.status = 'error'
+        this.emit()
         return
       }
-      this.source = src
-      this.update({ status: 'playing' })
+      current.source = src
+      current.status = 'playing'
+      this.emit()
     })
   }
 
-  /** 停止播放 */
-  stop() {
-    this.currentLoadToken++ // 让进行中的 load 回调失效
-    this.stopSource()
-    this.update({ trackId: null, status: 'idle' })
+  /** 从混音中移除一条 track（停止 source + 断开 gain） */
+  removeTrack(trackId: TrackId) {
+    const entry = this.active.get(trackId)
+    if (!entry) return
+    entry.loadToken++ // 让进行中的 load 回调失效
+    if (entry.source) {
+      try {
+        entry.source.stop()
+      } catch {
+        /* 未启动的 source stop 会抛 InvalidStateError，忽略 */
+      }
+      entry.source.disconnect()
+    }
+    entry.gain.disconnect()
+    this.active.delete(trackId)
+    this.emit()
   }
 
-  /** 设置音量（0-100） */
-  setVolume(volume: number) {
+  /** 切某轨独立音量（0-100），5ms 软过渡防 click */
+  setTrackVolume(trackId: TrackId, volume: number) {
+    const entry = this.active.get(trackId)
+    if (!entry || !this.ctx) return
     const v = Math.max(0, Math.min(100, volume))
+    entry.volume = v
+    entry.gain.gain.setTargetAtTime(v / 100, this.ctx.currentTime, 0.005)
+    this.emit()
+  }
+
+  /** 全清（V1.2 #3：取代单轨 stop 的语义） */
+  clearMix() {
+    Array.from(this.active.keys()).forEach((id) => this.removeTrack(id))
+  }
+
+  /** 设置 master 总音量（0-100），5ms 软过渡 */
+  setMasterVolume(volume: number) {
+    const v = Math.max(0, Math.min(100, volume))
+    this.masterVolume = v
     if (this.masterGain && this.ctx) {
-      // setTargetAtTime 5ms 软过渡，避免数字突变 click 杂音
       this.masterGain.gain.setTargetAtTime(v / 100, this.ctx.currentTime, 0.005)
     }
-    this.update({ volume: v })
+    this.emit()
+  }
+
+  // ============ 兼容旧 API（V1.2 #2 之前的单轨形态） ============
+  // preferencesStore 老代码可能仍调；hydration 时也用到 setVolume。
+  // 仅作 wrapper，不改语义。
+
+  /** @deprecated 使用 addTrack/removeTrack；保留单轨切换语义 */
+  setTrack(trackId: TrackId | null) {
+    this.clearMix()
+    if (trackId !== null) this.addTrack(trackId)
+  }
+
+  /** @deprecated 使用 setMasterVolume */
+  setVolume(volume: number) {
+    this.setMasterVolume(volume)
+  }
+
+  /** @deprecated 使用 clearMix */
+  stop() {
+    this.clearMix()
   }
 }
 

@@ -324,3 +324,72 @@
 **下一步**：commit → 等用户决定是否进 V1.2 #3（多轨混音 UI + AnalyserNode 频谱可视化）
 
 ---
+
+## 2026-06-24 — V1.2 #3 多轨混音 UI + AnalyserNode 频谱
+
+**背景**：#2 已把 WhiteNoiseService 底层迁到 Web Audio API（BufferSource + master GainNode）。本步在底座上做加法：(a) 多个内置音轨同时播 + 独立音量；(b) 全屏专注页底部叠加 AnalyserNode 真实音频频谱。
+
+**关键拍板**：
+
+1. **chip 由「单选切换」改为「toggle 加入/移除」**
+   - 否决「保留单选 + 加一个『混音模式』开关」—— 多一个状态概念，违反极克制
+   - 已选 chip 再点 = remove，未选 chip 点 = add，语义对等 + 零新概念
+   - 状态条从「正在播放：xxx + 音量条」改为「每激活轨一行 mini volume slider + 底部 master 总音量」
+
+2. **同时混音上限 3 轨**
+   - 否决无上限：手机端 slider 列表超过 3 视觉拥挤；rAF + 多 source CPU 也成线性增长
+   - 否决 2：「白噪音 + 环境 + 节奏」常见组合（雨声 + 咖啡馆 + 火堆）正好 3
+   - 实现：达到上限后未选 chip 自动 `disabled` + title 提示，再点 no-op
+
+3. **per-track + master 两层音量**
+   - per-track：每激活轨独立 `GainNode`，UI 行内 mini slider
+   - master：所有轨汇总到一个 master `GainNode`，UI 底部一个总音量
+   - 选两层不选单层：单层意味着每加一轨就要平衡前面所有轨的相对音量，UX 差
+
+4. **AnalyserNode 拓扑：master → analyser → destination（旁路）**
+   - 否决 destination → analyser 串行：会丢音
+   - master 之后接 analyser，analyser 再接 destination —— analyser 是无损 tap
+   - `fftSize=256 → frequencyBinCount=128`，前端取前 64 bin 画柱（人耳敏感低中频）
+   - `smoothingTimeConstant=0.75` —— 75% 时域平滑，柱条不抖
+
+5. **频谱组件位置 + 形态**
+   - 位置：FullscreenFocusPage 底部 `absolute inset-x-0 bottom-0`（docs/01 已定）
+   - 否决 HomePage 也挂：首页空间紧，圆环已是视觉焦点
+   - 形态：64 柱条形，颜色 `--color-primary` 跟随主题
+   - reduced-motion：画一次静态零线，不开 rAF（铁律 #9）
+   - 无激活轨（或无用户手势 AudioContext 未建）→ 画静态零线占位（不留空缺）
+
+6. **rAF 严格随组件生命周期**
+   - mount → 开 rAF；unmount → 立即 `cancelAnimationFrame`
+   - 退出 fullscreen 即停 60fps 绘制，移动端电量友好
+
+7. **preferencesStore 多轨 + migration**
+   - 旧字段 `whitenoiseTrack: TrackId | null` → 新字段 `whitenoiseMix: MixEntry[]`
+   - `whitenoiseVolume` 沿用为 master 音量，字段名不变
+   - persist `version: 1` + `migrate`：旧用户 `{whitenoiseTrack: 'cafe'}` → `{whitenoiseMix: [{trackId:'cafe', volume:60}]}`
+   - 不引入新 storage key —— 零迁移成本，旧用户无感升级
+
+8. **保留旧 API 作 deprecated wrapper**
+   - `WhiteNoiseService.setTrack/setVolume/stop` 仍可调，内部转 `clearMix + addTrack` / `setMasterVolume` / `clearMix`
+   - 准则 3 兜底：任何漏改的调用方仍能跑
+
+**沉淀（代码）**：
+- [src/service/WhiteNoiseService.ts](../src/service/WhiteNoiseService.ts) 扩多轨 API（addTrack/removeTrack/setTrackVolume/clearMix/setMasterVolume/getAnalyser） + 旧 API 兼容
+- [src/store/preferencesStore.ts](../src/store/preferencesStore.ts) `whitenoiseMix: MixEntry[]` + 4 action + persist `version:1` migrate
+- [src/components/WhiteNoiseBar.tsx](../src/components/WhiteNoiseBar.tsx) 重写 chip multi-select + per-track 行 + master 总音量 + atLimit disabled
+- [src/components/Spectrum.tsx](../src/components/Spectrum.tsx) 新增 64 柱 canvas + rAF + reduced-motion 降级
+- [src/pages/FullscreenFocusPage.tsx](../src/pages/FullscreenFocusPage.tsx) 底部挂载 `<Spectrum height={64} />`
+- [scripts/test-whitenoise.py](../scripts/test-whitenoise.py) 重写为 22 项多轨冒烟（含上限/per-track/master/缓存复用/reload 同步/spectrum 挂载/0 error）
+
+**回归验证**：
+- 新 test-whitenoise 22 PASS
+- test-achievements + test-timeline PASS 不变
+
+**不沉淀**：
+- 频谱样式拓展（圆环/瀑布图/光晕）—— YAGNI，柱状已满足「真实音频反馈」诉求
+- 频谱挂到 HomePage —— 首页空间紧，留 V2.x 决定
+- 多轨 preset（保存常用组合）—— 留 V1.2 #4 后或 V2.x
+
+**下一步**：commit → 等用户决定是否进 V1.2 #4（用户上传本地音频 + 数字样式扩到 6 种）
+
+---
