@@ -1,8 +1,6 @@
 // 成就系统类型定义 — 依 docs/04-data-model.md 「成就系统（V1.1 #4）」
 // 设计：表中**存在即解锁**（未解锁不存行），8 条固定 ID 枚举与 achievementDefs.ts 一一对应
 
-import type { PomodoroSession } from './TimerTypes'
-
 /** 8 条固定里程碑 ID（与 achievementDefs.ts ALL_ACHIEVEMENTS 一一对应） */
 export type AchievementId =
   | 'first-tomato'
@@ -58,6 +56,3 @@ export interface AchievementView {
   unlocked: boolean
   unlockedAt: number | null
 }
-
-/** 仅在测试 / 工具脚本中需要：原始 session 数组 → snapshot 构建器签名 */
-export type BuildSnapshotFn = (sessions: PomodoroSession[]) => SessionSnapshot

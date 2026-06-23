@@ -22,6 +22,8 @@ function formatUnlockedDate(ts: number): string {
 export function AchievementsPage() {
   const [views, setViews] = useState<AchievementView[]>([])
   const [loaded, setLoaded] = useState(false)
+  /** 加载失败时显式占位，避免与「0 / 0」零数据态混淆误导 */
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -35,7 +37,10 @@ export function AchievementsPage() {
       })
       .catch((err) => {
         console.error('[Achievement] 加载失败', err)
-        if (alive) setLoaded(true)
+        if (alive) {
+          setLoadError(true)
+          setLoaded(true)
+        }
       })
     return () => {
       alive = false
@@ -65,6 +70,13 @@ export function AchievementsPage() {
       {!loaded ? (
         <div className="py-xl text-center text-sm text-neutral-400">
           加载中…
+        </div>
+      ) : loadError ? (
+        <div
+          className="py-xl text-center text-sm text-danger"
+          data-testid="achievements-load-error"
+        >
+          成就加载失败，请刷新页面重试
         </div>
       ) : (
         <ul

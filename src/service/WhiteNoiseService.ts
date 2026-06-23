@@ -38,7 +38,10 @@ class WhiteNoiseService {
       this.audio.preload = 'auto'
       this.audio.volume = this.state.volume / 100
       // 加载失败 = 用户没下载该文件 → missing 态
+      // 守卫：stop() 内 removeAttribute('src') + load() 会异步触发空 src 的 error，
+      // 此时 trackId 已置 null，不应误标 missing 覆盖 idle 态。
       this.audio.addEventListener('error', () => {
+        if (this.state.trackId === null) return
         this.update({ status: 'missing' })
       })
       this.audio.addEventListener('canplay', () => {
@@ -84,8 +87,13 @@ class WhiteNoiseService {
     audio.src = track.src
     audio.currentTime = 0
     this.update({ trackId, status: 'loading' })
-    audio.play().catch(() => {
-      // play() 在 src 还未就绪时也可能 reject；missing 由 error 事件统一处理
+    audio.play().catch((err: unknown) => {
+      // NotAllowedError = 浏览器自动播放策略阻止（缺少用户手势），用户手动点会再次触发，留在 loading 不合适 → 回 idle
+      // 其他错误（src 还未就绪等）由 error 事件统一标 missing，这里不重复
+      const name = (err as { name?: string })?.name
+      if (name === 'NotAllowedError') {
+        this.update({ status: 'idle', trackId: null })
+      }
     })
   }
 

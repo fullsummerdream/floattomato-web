@@ -8,10 +8,9 @@ import type { AchievementId } from '@/types/AchievementTypes'
 export const TOAST_MAX = 3
 
 export interface AchievementToastItem {
-  /** 唯一 key —— `${id}-${pushedAt}` 防同 id 二次入队 React 冲突（理论上同 id 不会重复解锁，但兜底） */
+  /** 唯一 key —— `${id}-${now}-${idx}` 防同 id 二次入队 React 冲突（理论上同 id 不会重复解锁，但兜底） */
   key: string
   id: AchievementId
-  pushedAt: number
 }
 
 interface AchievementToastState {
@@ -34,7 +33,6 @@ export const useAchievementToastStore = create<AchievementToastState>(
         const next: AchievementToastItem[] = ids.map((id, idx) => ({
           key: `${id}-${now}-${idx}`,
           id,
-          pushedAt: now + idx, // 同批次轻微错开排序
         }))
         // FIFO：旧 + 新 取最后 TOAST_MAX
         const merged = [...s.items, ...next]

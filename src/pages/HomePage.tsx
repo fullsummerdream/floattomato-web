@@ -2,7 +2,7 @@
 // 依 docs/02-design-system.md 首页线框 + docs/06 阶段 1 任务
 // 圆环 + 数字 + 启停/跳过/放弃 + 任务 chip + 阶段标签
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { Play, Pause, SkipForward, X, Maximize2 } from 'lucide-react'
 import { ResponsivePage } from '@/components/ResponsivePage'
@@ -19,7 +19,7 @@ import {
 } from '@/store/timerStore'
 import { useTaskStore } from '@/store/taskStore'
 import { useAppearanceStore } from '@/store/appearanceStore'
-import { pressSpring, hoverScale, pressScale } from '@/theme/motion'
+import { pressSpring, hoverScale, pressScale, reducedMotion } from '@/theme/motion'
 
 /** 相位 → 圆环色 */
 function phaseColor(phase: string): string {
@@ -38,6 +38,8 @@ export function HomePage() {
   const material = useAppearanceStore((s) => s.material)
   const numberStyle = useAppearanceStore((s) => s.numberStyle)
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
+  // 铁律 #9：prefers-reduced-motion 关闭跨页 morph + 按压回弹，避免位移类眩晕
+  const reduce = useReducedMotion()
 
   const goFocus = () => {
     // View Transitions API 优先（Chrome 111+），降级走 Framer Motion layoutId 自动 morph
@@ -104,11 +106,12 @@ export function HomePage() {
         </div>
 
         {/* 圆环 + 数字（外壳走 MaterialBox，材质从 store 取）
-            layoutId="timer-ring" → 跨页面 Framer Motion 自动 morph（兼容 View Transitions API 降级路径） */}
+            layoutId="timer-ring" → 跨页面 Framer Motion 自动 morph（兼容 View Transitions API 降级路径）
+            铁律 #9：reduced-motion 用户跳 layout / layoutId，避免跨页 morph 位移 */}
         <motion.div
-          layout
-          layoutId="timer-ring"
-          transition={pressSpring}
+          layout={!reduce}
+          layoutId={reduce ? undefined : 'timer-ring'}
+          transition={reduce ? reducedMotion : pressSpring}
           style={{ viewTransitionName: 'timer-ring' } as React.CSSProperties}
         >
           <MaterialBox material={material} className="rounded-full p-md">
@@ -133,8 +136,8 @@ export function HomePage() {
               <motion.button
                 key={t.id}
                 type="button"
-                whileTap={pressScale}
-                transition={pressSpring}
+                whileTap={reduce ? undefined : pressScale}
+                transition={reduce ? reducedMotion : pressSpring}
                 onClick={() => setSelectedTaskId(t.id)}
                 className={`flex items-center gap-0.5 rounded-full border px-md py-sm text-sm transition-all ${
                   selectedTaskId === t.id
@@ -167,9 +170,10 @@ export function HomePage() {
           {/* 跳过（左，仅工作/暂停态显示；休息态主按钮承担跳过） */}
           {(isWorking || isPaused) && (
             <motion.button
-              whileHover={hoverScale}
-              whileTap={pressScale}
-              transition={pressSpring}
+              type="button"
+              whileHover={reduce ? undefined : hoverScale}
+              whileTap={reduce ? undefined : pressScale}
+              transition={reduce ? reducedMotion : pressSpring}
               onClick={skip}
               data-testid="btn-skip"
               className="flex h-12 w-12 items-center justify-center rounded-full border border-neutral-200 text-neutral-500 dark:border-neutral-800 dark:text-neutral-400"
@@ -181,9 +185,10 @@ export function HomePage() {
 
           {/* 启停（主按钮） */}
           <motion.button
-            whileHover={hoverScale}
-            whileTap={pressScale}
-            transition={pressSpring}
+            type="button"
+            whileHover={reduce ? undefined : hoverScale}
+            whileTap={reduce ? undefined : pressScale}
+            transition={reduce ? reducedMotion : pressSpring}
             onClick={handlePrimary}
             data-testid="btn-primary"
             className="flex h-16 w-16 items-center justify-center rounded-full bg-primary text-surface"
@@ -195,9 +200,10 @@ export function HomePage() {
           {/* 放弃（右） */}
           {!isIdle && (
             <motion.button
-              whileHover={hoverScale}
-              whileTap={pressScale}
-              transition={pressSpring}
+              type="button"
+              whileHover={reduce ? undefined : hoverScale}
+              whileTap={reduce ? undefined : pressScale}
+              transition={reduce ? reducedMotion : pressSpring}
               onClick={abandon}
               data-testid="btn-abandon"
               className="flex h-12 w-12 items-center justify-center rounded-full border border-neutral-200 text-danger dark:border-neutral-800"

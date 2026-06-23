@@ -9,18 +9,20 @@
 // - 文件缺失（用户没下载）→ chip 灰显 + tooltip 提示
 
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { Volume2, X as XIcon, Loader2, AlertCircle } from 'lucide-react'
 import { whiteNoiseService, type WhiteNoiseState } from '@/service/WhiteNoiseService'
 import { TRACKS, GROUP_LABELS, tracksByGroup, type TrackId } from '@/service/whitenoiseTracks'
 import { usePreferencesStore } from '@/store/preferencesStore'
-import { pressScale, pressSpring } from '@/theme/motion'
+import { pressScale, pressSpring, reducedMotion } from '@/theme/motion'
 
 export function WhiteNoiseBar() {
   const trackId = usePreferencesStore((s) => s.whitenoiseTrack)
   const setTrack = usePreferencesStore((s) => s.setWhitenoiseTrack)
   const volume = usePreferencesStore((s) => s.whitenoiseVolume)
   const setVolume = usePreferencesStore((s) => s.setWhitenoiseVolume)
+  // 铁律 #9：reduced-motion 跳按压回弹
+  const reduce = useReducedMotion()
 
   const [serviceState, setServiceState] = useState<WhiteNoiseState>(
     whiteNoiseService.getState(),
@@ -117,8 +119,8 @@ export function WhiteNoiseBar() {
                   <motion.button
                     key={t.id}
                     type="button"
-                    whileTap={pressScale}
-                    transition={pressSpring}
+                    whileTap={reduce ? undefined : pressScale}
+                    transition={reduce ? reducedMotion : pressSpring}
                     onClick={() => handleSelect(t.id)}
                     data-testid={`btn-track-${t.id}`}
                     aria-pressed={selected}

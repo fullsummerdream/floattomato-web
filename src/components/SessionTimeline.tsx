@@ -8,7 +8,7 @@
 // - 软删除：点删除 → inline 红色「确认删除？」3 秒窗口，再点真删（无 toast 依赖）
 
 import { useState, useEffect, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { Check, AlertTriangle, X, Trash2 } from 'lucide-react'
 import {
   useStatsStore,
@@ -16,7 +16,7 @@ import {
   type TimelineItem,
 } from '@/store/statsStore'
 import type { SessionStatus } from '@/types/TimerTypes'
-import { pressScale, pressSpring } from '@/theme/motion'
+import { pressScale, pressSpring, reducedMotion } from '@/theme/motion'
 
 const FILTERS: { value: TimelineFilter; label: string }[] = [
   { value: 'all', label: '全部' },
@@ -90,6 +90,8 @@ function TimelineRow({ item }: { item: TimelineItem }) {
   const [confirming, setConfirming] = useState(false)
   const timer = useRef<number | null>(null)
   const { Icon, cls, label } = statusVisual(item.status)
+  // 铁律 #9：reduced-motion 关 layout 重排 + 按压回弹
+  const reduce = useReducedMotion()
 
   // 3 秒未确认自动收回（防误触卡住）
   useEffect(() => {
@@ -110,11 +112,11 @@ function TimelineRow({ item }: { item: TimelineItem }) {
 
   return (
     <motion.li
-      layout
-      initial={{ opacity: 0, y: 4 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, x: -8 }}
-      transition={pressSpring}
+      layout={!reduce}
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 4 }}
+      animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
+      exit={reduce ? { opacity: 0 } : { opacity: 0, x: -8 }}
+      transition={reduce ? reducedMotion : pressSpring}
       data-testid={`timeline-row-${item.id}`}
       className="flex items-center gap-md border-b border-neutral-100 py-sm last:border-0 dark:border-neutral-800"
     >
@@ -147,8 +149,8 @@ function TimelineRow({ item }: { item: TimelineItem }) {
       {/* 删除 */}
       <motion.button
         type="button"
-        whileTap={pressScale}
-        transition={pressSpring}
+        whileTap={reduce ? undefined : pressScale}
+        transition={reduce ? reducedMotion : pressSpring}
         onClick={handleDeleteClick}
         data-testid={`btn-delete-${item.id}`}
         aria-label={confirming ? '点击确认删除' : '删除记录'}

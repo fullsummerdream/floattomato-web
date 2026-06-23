@@ -6,13 +6,13 @@
 // - 多条堆叠最多 3 条（FIFO 在 store 层处理）
 // - 手机底部居中（< sm），PC 右下角
 import { useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
   useAchievementToastStore,
   type AchievementToastItem,
 } from '@/store/achievementToastStore'
 import { ALL_ACHIEVEMENTS } from '@/service/achievementDefs'
-import { modalIn, modalOut } from '@/theme/motion'
+import { modalIn, modalOut, reducedMotion } from '@/theme/motion'
 
 /** toast 显示时长（毫秒） */
 const TOAST_DURATION = 3000
@@ -26,6 +26,8 @@ function ToastCard({ item }: { item: AchievementToastItem }) {
   // 用 ref 存"剩余 ms" 与 "上次 tick 时间"，避免 setState 重渲染抖
   const remainingRef = useRef(TOAST_DURATION)
   const lastTickRef = useRef(Date.now())
+  // 铁律 #9：prefers-reduced-motion 用户跳位移/缩放，只保留 fade
+  const reduce = useReducedMotion()
 
   useEffect(() => {
     let raf = 0
@@ -49,11 +51,15 @@ function ToastCard({ item }: { item: AchievementToastItem }) {
 
   return (
     <motion.div
-      layout
-      initial={{ opacity: 0, y: 20, scale: 0.9 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 10, scale: 0.95, transition: modalOut }}
-      transition={modalIn}
+      layout={!reduce}
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 20, scale: 0.9 }}
+      animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+      exit={
+        reduce
+          ? { opacity: 0, transition: reducedMotion }
+          : { opacity: 0, y: 10, scale: 0.95, transition: modalOut }
+      }
+      transition={reduce ? reducedMotion : modalIn}
       onPointerEnter={() => setPaused(true)}
       onPointerLeave={() => setPaused(false)}
       data-testid="achievement-toast"
