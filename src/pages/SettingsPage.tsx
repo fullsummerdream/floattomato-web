@@ -1,11 +1,19 @@
-// 设置页 — 通知 / PWA 安装 / 数据备份 / 快捷键说明
+// 设置页 — 通知 / PWA 安装 / 数据备份 / 偏好（音效/振动/暂停限时）/ 快捷键说明
 import { useEffect, useRef, useState } from 'react'
-import { Bell, BellOff, Download, CheckCircle2, Upload, Save, Keyboard, Info, ChevronRight } from 'lucide-react'
+import { Bell, BellOff, Download, CheckCircle2, Upload, Save, Keyboard, Info, ChevronRight, Volume2, VolumeX, Play, Vibrate, Timer } from 'lucide-react'
 import { ResponsivePage } from '@/components/ResponsivePage'
 import { notificationService } from '@/service/NotificationService'
 import { pwaService } from '@/service/PwaService'
 import { backupService, BackupError, type ImportSummary } from '@/service/BackupService'
+import { audioService, type VolumeLevel } from '@/service/AudioService'
 import { useTimerStore } from '@/store/timerStore'
+import {
+  usePreferencesStore,
+  PAUSE_LIMIT_OPTIONS,
+  PAUSE_LIMIT_LABELS,
+  VOLUME_LABELS,
+  type PauseLimitSeconds,
+} from '@/store/preferencesStore'
 import { HOTKEYS } from '@/hooks/useGlobalHotkeys'
 import { Link } from 'react-router-dom'
 
@@ -46,6 +54,26 @@ export function SettingsPage() {
   const [backup, setBackup] = useState<BackupState>({ kind: 'idle' })
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const phase = useTimerStore((s) => s.runtime.phase)
+
+  // 偏好（音效/振动/暂停限时）— 持久化在 preferencesStore
+  const volume = usePreferencesStore((s) => s.volume)
+  const setVolume = usePreferencesStore((s) => s.setVolume)
+  const vibrateEnabled = usePreferencesStore((s) => s.vibrateEnabled)
+  const setVibrate = usePreferencesStore((s) => s.setVibrate)
+  const pauseLimit = usePreferencesStore((s) => s.pauseLimit)
+  const setPauseLimit = usePreferencesStore((s) => s.setPauseLimit)
+  // 振动 API 支持检测（iOS Safari 静默降级）
+  const vibrateSupported =
+    typeof navigator !== 'undefined' && 'vibrate' in navigator
+
+  const previewSound = () => {
+    audioService.unlock()
+    audioService.playComplete()
+  }
+  const previewVibrate = () => {
+    if (!vibrateSupported) return
+    audioService.vibrate([100, 50, 100, 50, 200])
+  }
 
   useEffect(() => {
     setPerm(notificationService.permission())
@@ -251,9 +279,157 @@ export function SettingsPage() {
         )}
       </section>
 
-      <p className="mt-3xl text-sm text-neutral-400">
-        音效 / 振动 / 暂停限时 等设置项后续阶段落地
-      </p>
+      {/* 音效 */}
+      <section className="mt-xl flex flex-col gap-md" data-testid="section-sound">
+        <h2 className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">
+          番茄完成音效
+        </h2>
+        <div className="flex items-center gap-md rounded-lg border border-neutral-200 px-md py-md dark:border-neutral-800">
+          {volume === 0 ? (
+            <VolumeX size={18} className="text-neutral-400" />
+          ) : (
+            <Volume2 size={18} className="text-primary" />
+          )}
+          <div className="flex-1">
+            <div className="text-sm">音量</div>
+            <div className="mt-xs text-xs text-neutral-400">
+              番茄结束/阶段切换时的合成提示音
+            </div>
+          </div>
+          {/* 4 档音量 segment */}
+          <div
+            className="flex overflow-hidden rounded-md border border-neutral-300 dark:border-neutral-700"
+            role="group"
+            aria-label="音量档位"
+            data-testid="volume-segment"
+          >
+            {([0, 1, 2, 3] as const).map((lv) => (
+              <button
+                key={lv}
+                type="button"
+                onClick={() => setVolume(lv as VolumeLevel)}
+                aria-pressed={volume === lv}
+                data-testid={`btn-volume-${lv}`}
+                className={`px-md py-xs text-xs ${
+                  volume === lv
+                    ? 'bg-primary text-surface'
+                    : 'text-neutral-600 hover:bg-neutral-50 dark:text-neutral-300 dark:hover:bg-neutral-900'
+                }`}
+              >
+                {VOLUME_LABELS[lv as VolumeLevel]}
+              </button>
+            ))}
+          </div>
+          {/* 试听 */}
+          <button
+            type="button"
+            onClick={previewSound}
+            disabled={volume === 0}
+            aria-label="试听提示音"
+            data-testid="btn-sound-preview"
+            className="flex h-8 w-8 items-center justify-center rounded-md border border-neutral-300 text-neutral-600 hover:border-primary hover:text-primary disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300"
+          >
+            <Play size={14} />
+          </button>
+        </div>
+      </section>
+
+      {/* 振动 */}
+      <section className="mt-xl flex flex-col gap-md" data-testid="section-vibrate">
+        <h2 className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">
+          振动反馈
+        </h2>
+        <div className="flex items-center gap-md rounded-lg border border-neutral-200 px-md py-md dark:border-neutral-800">
+          <Vibrate
+            size={18}
+            className={vibrateEnabled && vibrateSupported ? 'text-primary' : 'text-neutral-400'}
+          />
+          <div className="flex-1">
+            <div className="text-sm">
+              番茄完成时振动
+              {!vibrateSupported && (
+                <span className="ml-sm text-xs text-neutral-400">（当前设备不支持）</span>
+              )}
+            </div>
+            <div className="mt-xs text-xs text-neutral-400">
+              Android Chrome 支持；iOS 系统级屏蔽 Vibration API
+            </div>
+          </div>
+          {/* 试振（开启 + 设备支持时显示） */}
+          {vibrateEnabled && vibrateSupported && (
+            <button
+              type="button"
+              onClick={previewVibrate}
+              aria-label="试振"
+              data-testid="btn-vibrate-preview"
+              className="flex h-8 w-8 items-center justify-center rounded-md border border-neutral-300 text-neutral-600 hover:border-primary hover:text-primary dark:border-neutral-700 dark:text-neutral-300"
+            >
+              <Play size={14} />
+            </button>
+          )}
+          {/* 开关 */}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={vibrateEnabled}
+            aria-label={vibrateEnabled ? '关闭振动' : '开启振动'}
+            disabled={!vibrateSupported}
+            onClick={() => setVibrate(!vibrateEnabled)}
+            data-testid="switch-vibrate"
+            className={`relative h-6 w-11 rounded-full transition-colors disabled:opacity-40 ${
+              vibrateEnabled && vibrateSupported
+                ? 'bg-primary'
+                : 'bg-neutral-300 dark:bg-neutral-700'
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                vibrateEnabled ? 'translate-x-5' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </div>
+      </section>
+
+      {/* 暂停限时 */}
+      <section className="mt-xl flex flex-col gap-md" data-testid="section-pause-limit">
+        <h2 className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">
+          单次暂停限时
+        </h2>
+        <div className="flex items-center gap-md rounded-lg border border-neutral-200 px-md py-md dark:border-neutral-800">
+          <Timer size={18} className="text-primary" />
+          <div className="flex-1">
+            <div className="text-sm">超时未恢复将自动中断当前番茄</div>
+            <div className="mt-xs text-xs text-neutral-400">
+              当前：{PAUSE_LIMIT_LABELS[pauseLimit]}
+            </div>
+          </div>
+        </div>
+        {/* 5 档 segment（30s / 1min / 3min / 5min / 不限） */}
+        <div
+          className="flex overflow-hidden rounded-md border border-neutral-300 dark:border-neutral-700"
+          role="group"
+          aria-label="暂停限时档位"
+          data-testid="pause-limit-segment"
+        >
+          {PAUSE_LIMIT_OPTIONS.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => setPauseLimit(opt as PauseLimitSeconds)}
+              aria-pressed={pauseLimit === opt}
+              data-testid={`btn-pause-limit-${opt}`}
+              className={`flex-1 px-md py-sm text-xs ${
+                pauseLimit === opt
+                  ? 'bg-primary text-surface'
+                  : 'text-neutral-600 hover:bg-neutral-50 dark:text-neutral-300 dark:hover:bg-neutral-900'
+              }`}
+            >
+              {PAUSE_LIMIT_LABELS[opt as PauseLimitSeconds]}
+            </button>
+          ))}
+        </div>
+      </section>
 
       {/* 键盘快捷键 */}
       <section className="mt-xl flex flex-col gap-md" data-testid="section-hotkeys">

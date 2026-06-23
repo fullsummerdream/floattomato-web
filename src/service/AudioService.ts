@@ -2,10 +2,25 @@
 // 依 docs/05-tech-stack.md 权限策略 + docs/07 铁律（静默降级）
 // 无音频文件，纯合成（避免网络请求 + 包体积）
 
+/** 音量分档 0=静音 / 1=低 / 2=中 / 3=高 → gain 值映射 */
+export type VolumeLevel = 0 | 1 | 2 | 3
+const VOLUME_GAIN: Record<VolumeLevel, number> = {
+  0: 0,
+  1: 0.07,
+  2: 0.2,
+  3: 0.4,
+}
+
 class AudioService {
   private ctx: AudioContext | null = null
-  soundEnabled = true
+  /** 音量档位（0 = 静音） */
+  volume: VolumeLevel = 2
   vibrateEnabled = true
+
+  /** 当前 gain（衍生） */
+  private get gain(): number {
+    return VOLUME_GAIN[this.volume]
+  }
 
   private getCtx(): AudioContext | null {
     if (typeof window === 'undefined') return null
@@ -33,9 +48,10 @@ class AudioService {
 
   /** 播放提示音 — 三声升调（番茄完成） */
   playComplete() {
-    if (!this.soundEnabled) return
+    if (this.volume === 0) return
     const ctx = this.getCtx()
     if (!ctx) return
+    const peak = this.gain
     const now = ctx.currentTime
     // 三声升调 660 → 880 → 1100 Hz
     ;[660, 880, 1100].forEach((freq, i) => {
@@ -45,7 +61,7 @@ class AudioService {
       osc.frequency.value = freq
       const start = now + i * 0.15
       gain.gain.setValueAtTime(0, start)
-      gain.gain.linearRampToValueAtTime(0.2, start + 0.02)
+      gain.gain.linearRampToValueAtTime(peak, start + 0.02)
       gain.gain.exponentialRampToValueAtTime(0.001, start + 0.13)
       osc.connect(gain).connect(ctx.destination)
       osc.start(start)
@@ -53,18 +69,19 @@ class AudioService {
     })
   }
 
-  /** 阶段切换轻提示 — 单声短音 */
+  /** 阶段切换轻提示 — 单声短音（音量比 complete 弱 60%） */
   playTick() {
-    if (!this.soundEnabled) return
+    if (this.volume === 0) return
     const ctx = this.getCtx()
     if (!ctx) return
+    const peak = this.gain * 0.6
     const now = ctx.currentTime
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
     osc.type = 'sine'
     osc.frequency.value = 440
     gain.gain.setValueAtTime(0, now)
-    gain.gain.linearRampToValueAtTime(0.12, now + 0.01)
+    gain.gain.linearRampToValueAtTime(peak, now + 0.01)
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1)
     osc.connect(gain).connect(ctx.destination)
     osc.start(now)
