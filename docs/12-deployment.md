@@ -9,22 +9,29 @@
 
 ```bash
 npm ci             # 装依赖
-npm run fetch-audio # 下载白噪音音轨（首次必跑；详见下方「音频资源」）
 npm run build      # 出包到 dist/
 ```
 
-`dist/` 体积 ~511KB（precache），首屏 gzip ~50KB。所有路由懒加载、静态资源带 hash。
+`dist/` 体积 ~511KB（precache，不含音频），首屏 gzip ~50KB。所有路由懒加载、静态资源带 hash。音频 ~33MB **随仓库分发**，走 PWA runtime cache（首次播放后离线可用），不进 precache（避免拖慢首屏）。
 
 ### 音频资源（V1.1）
 
-V1.1 引入 15 段白噪音音轨（雨/自然/环境/噪音 4 组）。出于 license 风险考虑，**音频文件不进 git**：
+V1.1 引入 15 段白噪音音轨（雨/自然/环境/噪音 4 组），未来可能扩展为白噪音混合效果（V1.2+ 路线候选）。
 
-- 清单：[`scripts/audio-manifest.json`](../scripts/audio-manifest.json)
-- 下载：`npm run fetch-audio` 自动并发下载到 `public/audio/`（~5MB，并发 4，幂等）
-- License：Mixkit Sound Effects Free License（免费免商用免署名）
-- 音频走 PWA runtime cache（首次播放后离线可用），不进 precache（5MB 拖慢首屏）
+- **音频文件随仓库分发**（`public/audio/`，~33MB）—— clone 即得，无需额外步骤
+- 来源：moodist 开源项目（[github.com/remvze/moodist](https://github.com/remvze/moodist)），原始 license = Pixabay Content License 或 CC0（嵌入式商用合法、免署名）
+- 致谢与映射详见 [`docs/AUDIO_CREDITS.md`](AUDIO_CREDITS.md)
+- 音频走 PWA runtime cache（首次播放后离线可用），不进 precache（33MB 拖慢首屏）
 
-> 没跑 `npm run fetch-audio` 也不影响应用启动 — 白噪音 chip 点击会显示「音轨缺失：xxx」提示。
+### 换/补音轨（可选）
+
+仅当需要替换音轨或从 moodist 拉取更多音频时使用：
+
+- 清单：[`scripts/audio-manifest.json`](../scripts/audio-manifest.json)（声明 ID → 源 URL 映射）
+- 工具：`npm run fetch-audio` 并发下载到 `public/audio/`（幂等，已存在文件跳过）
+- 新增音轨需同步更新 [`src/service/whitenoiseTracks.ts`](../src/service/whitenoiseTracks.ts) 的 `TrackId` 与 `TRACKS` 数组、[`docs/AUDIO_CREDITS.md`](AUDIO_CREDITS.md) 映射表
+
+> 缺失文件不影响应用启动 — 白噪音 chip 点击会显示「音轨缺失：xxx」提示。
 
 ---
 

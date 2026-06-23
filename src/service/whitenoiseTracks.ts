@@ -1,6 +1,7 @@
 // 白噪音音轨清单（15 段，分 4 组）
 // 音频文件位于 public/audio/，不进 git（见 .gitignore）
 // 用户首次部署需运行 npm run fetch-audio 下载
+// 音频来源：moodist 开源项目（详见 docs/AUDIO_CREDITS.md）
 
 export type TrackId =
   // 雨声系
@@ -56,10 +57,10 @@ export const TRACKS: Track[] = [
   { id: 'cafe', name: '咖啡馆', group: 'urban', src: '/audio/cafe.mp3' },
   { id: 'library', name: '图书馆', group: 'urban', src: '/audio/library.mp3' },
   { id: 'train', name: '火车', group: 'urban', src: '/audio/train.mp3' },
-  // 合成噪音
-  { id: 'white-noise', name: '白噪音', group: 'noise', src: '/audio/white-noise.mp3' },
-  { id: 'pink-noise', name: '粉噪音', group: 'noise', src: '/audio/pink-noise.mp3' },
-  { id: 'brown-noise', name: '棕噪音', group: 'noise', src: '/audio/brown-noise.mp3' },
+  // 合成噪音（moodist 源为 .wav）
+  { id: 'white-noise', name: '白噪音', group: 'noise', src: '/audio/white-noise.wav' },
+  { id: 'pink-noise', name: '粉噪音', group: 'noise', src: '/audio/pink-noise.wav' },
+  { id: 'brown-noise', name: '棕噪音', group: 'noise', src: '/audio/brown-noise.wav' },
 ]
 
 /** 按分组返回 */

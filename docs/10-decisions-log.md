@@ -138,3 +138,34 @@
 - 现有 `src/` 代码结构暂不重构——桌面端启动时一次性迁 monorepo，避免现阶段为"未来可能"做预测性返工（CLAUDE.md 准则 2 简单优先）
 
 **下一步**：本决策仅落文档，**不动代码**。回到 V1.1 主线（音效 + 振动 → 白噪音 MVP → 统计时间线 → 成就）。
+
+---
+
+## 2026-06-23 — V1.1 #2 白噪音音源选定：moodist，音频随仓库分发
+
+**背景**：V1.1 #2 白噪音 MVP 初版使用 Mixkit 音轨（CDN URL + `npm run fetch-audio` 拉取，音频不进 git），实测**音质不佳**。
+
+**决策**：
+
+1. **音源切换为 [moodist](https://github.com/remvze/moodist)**（MIT 代码 + Pixabay/CC0 音频）。映射 15 段到 moodist 84 段精选库（rain/nature/places/noise 4 类）。
+2. **音频进 git**（`public/audio/` 纳入版本控制，~33MB）：
+   - License 上无差异——Web 应用部署后音频本就以 standalone URL 暴露，是否进 git 不改变法律姿态
+   - moodist 自身 5k stars 公开 2 年同模式分发，未被 takedown 视作先例
+   - 工程便利：clone 即跑、git checkout 任意 commit 完整可重现
+   - 未来扩展白噪音混合（V1.2+ 候选）需从 moodist 继续拉取更多音轨，进 git 后增量友好
+3. **保留 `npm run fetch-audio` 工具链**作「换/补音轨」专用，不再是部署必需步骤。
+4. **致谢文档** [docs/AUDIO_CREDITS.md](AUDIO_CREDITS.md)：标 15 段映射 + 双 license 边界 + moodist 整理工作。
+
+**不沉淀**：
+- 当前 15 段足够 V1.1 MVP，**不预测性扩 30/60 段**——等用户反馈/混音需求落地再补（CLAUDE.md 准则 2 简单优先）
+- UI 与播放逻辑不复用 moodist 代码
+
+**沉淀**：
+- [.gitignore](../.gitignore) 删除 `public/audio/` 排除规则
+- [docs/12-deployment.md](12-deployment.md) 部署命令删 `npm run fetch-audio` 必跑步骤，移至「换/补音轨」可选小节
+- [docs/AUDIO_CREDITS.md](AUDIO_CREDITS.md) 顶部声明「音频随仓库分发」
+- [scripts/audio-manifest.json](../scripts/audio-manifest.json) URL 切到 moodist raw，license 字段更新
+- [src/service/whitenoiseTracks.ts](../src/service/whitenoiseTracks.ts) 3 段噪音文件 `.mp3` → `.wav`（moodist 原始格式）
+
+**反思**：初版「license 红线 → 不进 git」是过度保守判断，被 Pixabay License 字面条款震慑，没看到「Web 应用本质上必然 standalone 暴露音频」的现实。moodist 先例是关键解锁——开源生态已有清晰共识。
+

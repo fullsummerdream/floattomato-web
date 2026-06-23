@@ -14,7 +14,3 @@ pnpm-debug.log*
 
 # TypeScript 增量编译产物
 *.tsbuildinfo
-
-# 白噪音音轨 — license 红线，禁入 git
-# 用户执行 npm run fetch-audio 本地下载（清单见 scripts/audio-manifest.json）
-public/audio/
