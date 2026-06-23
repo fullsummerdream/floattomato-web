@@ -1,2 +1,5 @@
 User-agent: *
 Allow: /
+
+# 部署前替换为真实域名
+Sitemap: https://floattomato.example.com/sitemap.xml
