@@ -17,6 +17,7 @@
 | 07 | [07-pitfalls.md](07-pitfalls.md) | 关键陷阱与铁律 |
 | 10 | [10-decisions-log.md](10-decisions-log.md) | 已敲定决策日志（**append-only**） |
 | 11 | [11-future-ideas.md](11-future-ideas.md) | 想法暂存：V1.0 期间想到但不做的点子 |
+| 12 | [12-deployment.md](12-deployment.md) | 部署指南：Nginx 直部 / Docker 镜像 / 自检清单 |
 
 ## 维护规则
 

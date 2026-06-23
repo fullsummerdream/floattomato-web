@@ -1,0 +1,34 @@
+# Docker 构建上下文排除清单 —— 不让无关文件进 builder stage 拖慢构建
+
+# 依赖与产物（builder 自己重新装/构建）
+node_modules
+dist
+dist-ssr
+
+# 开发环境产物
+*.tsbuildinfo
+*.log
+npm-debug.log*
+
+# 编辑器与系统
+.vscode
+.idea
+.DS_Store
+
+# Git
+.git
+.gitignore
+.github
+
+# 文档与开发辅助（不影响产物）
+docs
+*.md
+!README.md
+
+# 测试与 CI 配置
+.eslintrc*
+.prettierrc*
+
+# 本身
+Dockerfile
+.dockerignore
