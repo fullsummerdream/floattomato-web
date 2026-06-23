@@ -1,6 +1,6 @@
 // 设置页 — 通知 / PWA 安装 / 数据备份 / 偏好（音效/振动/暂停限时）/ 快捷键说明
 import { useEffect, useRef, useState } from 'react'
-import { Bell, BellOff, Download, CheckCircle2, Upload, Save, Keyboard, Info, ChevronRight, Volume2, VolumeX, Play, Vibrate, Timer } from 'lucide-react'
+import { Bell, BellOff, Download, CheckCircle2, Upload, Save, Keyboard, Info, ChevronRight, Volume2, VolumeX, Play, Vibrate, Timer, Trophy } from 'lucide-react'
 import { ResponsivePage } from '@/components/ResponsivePage'
 import { notificationService } from '@/service/NotificationService'
 import { pwaService } from '@/service/PwaService'
@@ -30,6 +30,15 @@ function summarizeImport(s: ImportSummary): string {
   if (t) parts.push(t)
   if (e) parts.push(e)
   if (p) parts.push(p)
+  // V1.1 #4 成就（如有）
+  if (
+    s.achievementCount &&
+    s.achievementCount.added + s.achievementCount.skipped > 0
+  ) {
+    parts.push(
+      `成就 新增 ${s.achievementCount.added} / 跳过 ${s.achievementCount.skipped}`,
+    )
+  }
   if (s.appearanceRestored) parts.push('外观已还原')
   if (s.fromVersion !== s.toVersion) {
     parts.unshift(`从 v${s.fromVersion} 迁移到 v${s.toVersion}`)
@@ -62,6 +71,11 @@ export function SettingsPage() {
   const setVibrate = usePreferencesStore((s) => s.setVibrate)
   const pauseLimit = usePreferencesStore((s) => s.pauseLimit)
   const setPauseLimit = usePreferencesStore((s) => s.setPauseLimit)
+  // V1.1 #4 — 成就反馈开关
+  const achievementsEnabled = usePreferencesStore((s) => s.achievementsEnabled)
+  const setAchievementsEnabled = usePreferencesStore(
+    (s) => s.setAchievementsEnabled,
+  )
   // 振动 API 支持检测（iOS Safari 静默降级）
   const vibrateSupported =
     typeof navigator !== 'undefined' && 'vibrate' in navigator
@@ -431,6 +445,44 @@ export function SettingsPage() {
         </div>
       </section>
 
+      {/* 成就反馈（V1.1 #4） */}
+      <section className="mt-xl flex flex-col gap-md" data-testid="section-achievements">
+        <h2 className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">
+          成就反馈
+        </h2>
+        <div className="flex items-center gap-md rounded-lg border border-neutral-200 px-md py-md dark:border-neutral-800">
+          <Trophy
+            size={18}
+            className={`shrink-0 ${achievementsEnabled ? 'text-primary' : 'text-neutral-400'}`}
+          />
+          <div className="flex-1">
+            <div className="text-sm">解锁成就时弹提示</div>
+            <div className="mt-xs text-xs text-neutral-400">
+              关闭后不再弹 toast，成就墙仍可查阅；重开会补齐期间已达成项
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={achievementsEnabled === true}
+            aria-label={achievementsEnabled ? '关闭成就提示' : '开启成就提示'}
+            onClick={() => setAchievementsEnabled(!achievementsEnabled)}
+            data-testid="switch-achievements"
+            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+              achievementsEnabled
+                ? 'bg-primary'
+                : 'bg-neutral-300 dark:bg-neutral-700'
+            }`}
+          >
+            <span
+              className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                achievementsEnabled ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+      </section>
+
       {/* 键盘快捷键 */}
       <section className="mt-xl flex flex-col gap-md" data-testid="section-hotkeys">
         <h2 className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">
@@ -464,11 +516,26 @@ export function SettingsPage() {
         </div>
       </section>
 
-      {/* 关于（入口） */}
+      {/* 关于（入口）+ 成就墙 */}
       <section className="mt-xl flex flex-col gap-md">
         <h2 className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">
           其他
         </h2>
+        {/* V1.1 #4 成就墙入口（在「关于」上方一行） */}
+        <Link
+          to="/achievements"
+          data-testid="link-achievements"
+          className="flex items-center gap-md rounded-lg border border-neutral-200 px-md py-md hover:border-primary dark:border-neutral-800"
+        >
+          <Trophy size={18} className="shrink-0 text-neutral-400" />
+          <div className="flex-1">
+            <div className="text-sm">成就墙</div>
+            <div className="mt-xs text-xs text-neutral-400">
+              查看已解锁与未解锁的里程碑
+            </div>
+          </div>
+          <ChevronRight size={16} className="shrink-0 text-neutral-400" />
+        </Link>
         <Link
           to="/about"
           data-testid="link-about"

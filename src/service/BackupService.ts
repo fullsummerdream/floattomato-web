@@ -14,10 +14,12 @@ import type {
   PomodoroPreset,
   PomodoroSession,
 } from '@/types/TimerTypes'
+import type { AchievementRecord } from '@/types/AchievementTypes'
 
-/** 当前导出 schema 版本号 — bump 时同步加 migration */
-export const CURRENT_SCHEMA_VERSION = 1
-/** 向下兼容最近 N 个大版本 */
+/** 当前导出 schema 版本号 — bump 时同步加 migration
+ *  v2 (V1.1 #4)：新增 achievements 字段；导入旧版（v1）自动注入空数组 */
+export const CURRENT_SCHEMA_VERSION = 2
+/** 向下兼容最近 N 个大版本（v1 仍可导入） */
 export const MIN_SUPPORTED_SCHEMA = 1
 
 export interface AppearanceSnapshot {
@@ -37,6 +39,8 @@ export interface ExportPayload {
   sessions: PomodoroSession[]
   presets: PomodoroPreset[]
   appearance: AppearanceSnapshot | null
+  /** V1.1 #4 — 解锁记录；v1 数据导入时由 migration 补空数组 */
+  achievements: AchievementRecord[]
 }
 
 export interface ImportSummary {
@@ -47,6 +51,8 @@ export interface ImportSummary {
   sessionCount: { added: number; updated: number; skipped: number }
   presetCount: { added: number; updated: number; skipped: number }
   appearanceRestored: boolean
+  /** V1.1 #4 — 成就解锁导入数（新增；旧的存在则跳过保留先达成时间） */
+  achievementCount: { added: number; skipped: number }
 }
 
 export class BackupError extends Error {
@@ -65,8 +71,12 @@ export type BackupErrorCode =
  *  bump CURRENT_SCHEMA_VERSION 时务必在此追加 N → N+1 */
 type Migration = (payload: ExportPayload) => ExportPayload
 const SCHEMA_MIGRATIONS: Record<number, Migration> = {
-  // 示例：未来从 1 升 2 的 migration
-  // 1: (p) => ({ ...p, sessions: p.sessions.map(s => ({ ...s, newField: defaultValue })), schemaVersion: 2 }),
+  // v1 → v2 (V1.1 #4)：旧备份无 achievements 字段，注入空数组
+  1: (p) => ({
+    ...p,
+    achievements: Array.isArray(p.achievements) ? p.achievements : [],
+    schemaVersion: 2,
+  }),
 }
 
 const APPEARANCE_KEY = 'floattomato:appearance'
@@ -106,10 +116,11 @@ class BackupService {
 
   /** 导出当前 DB + 外观到 ExportPayload */
   async export(): Promise<ExportPayload> {
-    const [tasks, sessions, presets] = await Promise.all([
+    const [tasks, sessions, presets, achievements] = await Promise.all([
       db.tasks.toArray(),
       db.sessions.toArray(),
       db.presets.toArray(),
+      db.achievements.toArray(),
     ])
 
     let appearance: AppearanceSnapshot | null = null
@@ -142,6 +153,7 @@ class BackupService {
       sessions,
       presets,
       appearance,
+      achievements,
     }
   }
 
@@ -252,6 +264,22 @@ class BackupService {
       stripSync,
     )
 
+    // V1.1 #4 — 成就解锁：本地已存在则保留本地（先达成时间为准），不存在则导入
+    let achievementAdded = 0
+    let achievementSkipped = 0
+    const incomingAchievements = Array.isArray(payload.achievements)
+      ? payload.achievements
+      : []
+    for (const a of incomingAchievements) {
+      const existing = await db.achievements.get(a.id)
+      if (!existing) {
+        await db.achievements.put(a)
+        achievementAdded++
+      } else {
+        achievementSkipped++
+      }
+    }
+
     // 还原外观（直接覆盖；外观无 updatedAt，导入即覆盖语义）
     let appearanceRestored = false
     if (payload.appearance) {
@@ -273,6 +301,7 @@ class BackupService {
       sessionCount,
       presetCount,
       appearanceRestored,
+      achievementCount: { added: achievementAdded, skipped: achievementSkipped },
     }
   }
 

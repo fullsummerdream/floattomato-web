@@ -5,6 +5,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ThemeProvider } from '@/theme/ThemeProvider'
 import { TabLayout } from '@/components/TabLayout'
 import { BackgroundCarousel } from '@/components/BackgroundCarousel'
+import { AchievementToastContainer } from '@/components/AchievementToast'
 import { HomePage } from '@/pages/HomePage'
 import { GlobalHotkeys } from '@/hooks/useGlobalHotkeys'
 import { useAppearanceStore } from '@/store/appearanceStore'
@@ -37,6 +38,11 @@ const OnboardingPage = lazy(() =>
 )
 const AboutPage = lazy(() =>
   import('@/pages/AboutPage').then((m) => ({ default: m.AboutPage })),
+)
+const AchievementsPage = lazy(() =>
+  import('@/pages/AchievementsPage').then((m) => ({
+    default: m.AchievementsPage,
+  })),
 )
 
 /** 路由切换瞬态 fallback —— 极简文字，避免布局抖动 */
@@ -96,9 +102,13 @@ export default function App() {
               <Route path="/presets" element={<PresetEditorPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/about" element={<AboutPage />} />
+              {/* V1.1 #4 成就墙 — 不进 Tab，从设置入口跳转 */}
+              <Route path="/achievements" element={<AchievementsPage />} />
             </Route>
           </Routes>
         </Suspense>
+        {/* 全局 Toast 容器 — V1.1 #4，挂载一次，监听 store */}
+        <AchievementToastContainer />
       </BrowserRouter>
     </ThemeProvider>
   )

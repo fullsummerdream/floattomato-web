@@ -164,12 +164,50 @@
 **验证**：完成番茄后时间线出现该记录，数据与聚合视图一致
 
 ### 4. 极克制成就系统（~1.5 天）
-- 固定 ~8 个里程碑成就（首次完成 / 累计 10/50/100 番茄 / 7 天连续 / 100 小时等）
-- 无积分/无排行榜/无推送弹窗；「成就墙」入口在关于页上方
-- 新建 `achievements` IndexedDB 表，番茄完成后 hook 检查
-- 一键关闭（设置页开关）
 
-**验证**：完成对应里程碑后徽章解锁；关开关后不触发检查
+**8 条固定里程碑**（详见 [04-data-model.md](04-data-model.md#成就系统v11-4)）：
+首次 `first-tomato` / 累计 `ten/fifty/hundred-tomatoes` / 时长 `focus-hour/focus-day` / 节奏 `seven-day-streak` / 彩蛋 `early-bird`
+
+**数据**：
+- Dexie `version(2)` 新建 `achievements` 表，**表中存在即解锁**（无未解锁行）
+- 类型 `AchievementRecord { id, unlockedAt }` 见 `src/types/AchievementTypes.ts`
+
+**双触发点**：
+- 番茄完成（`timerStore` 监听 `sessionEnd + completed`）→ 评估 + toast（开关开时）
+- 应用启动 IIFE → 评估**不弹 toast**（首扫静默，防 toast 排队骚扰）
+
+**反馈**：
+- 解锁 toast 3 秒右下角弹（手机底部居中），Q 弹 spring 入场（用 `motion.ts` token）
+- `pointerEnter` 暂停倒计时，`pointerLeave` 恢复
+- 不可点击（被动陈列原则）
+- 多条堆叠最多 3 条，超出 FIFO 顶替
+
+**UI 入口**：
+- `/achievements` 路由（lazy 加载），**不进** TabLayout，避免 Tab 膨胀
+- 入口在 SettingsPage「关于」上方一行 `<Link>`
+- 成就墙：手机 2 列 / PC 4 列网格；解锁=彩色 emoji+日期，未解锁=灰度 emoji+条件描述
+- 顶部「已解锁 X / 8」小汇总
+
+**开关**：
+- preferencesStore 新增 `achievementsEnabled: boolean`（默认 true）
+- 设置页「成就反馈」节，开关样式复刻振动开关（已含 `left-0.5` thumb 修正 + `shrink-0`）
+- 关后不评估不弹 toast；成就墙仍可查阅
+- 重开会触发补扫
+
+**幂等 & 并发**：
+- 已解锁项跳过 check → N 遍跑结果一致
+- `isEvaluating` 标志位防 async 二次进入
+
+**性能边界**（**当前 V1.1 不优化**，留作后期升级）：
+- 当前 O(n) 全表扫，session < 几千条无感知（< 30ms）
+- 升级路径见 [04-data-model.md 成就系统-性能升级路径](04-data-model.md#成就系统v11-4)
+- 触发条件：用户反馈卡顿 或 profile 发现 evaluate > 50ms
+
+**验证**：
+- 完成第 1/10/50/100 个番茄分别解锁对应里程碑
+- 关开关后完成番茄不弹 toast；重开后补齐期间已达成项
+- 启动应用首扫不弹 toast；evaluate 并发跑两次仅写一次库
+- Playwright `scripts/test-achievements.py` 冒烟绿灯
 
 **合计**：5-7 个工作日
 

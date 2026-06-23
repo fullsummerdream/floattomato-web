@@ -70,6 +70,15 @@
 - 候选版本：V3.x+
 - 风险：扩展有独立审核流程（Chrome Web Store），与 PWA 定位部分重叠
 
+### 2026-06-23 成就系统增量缓存表（性能升级候选）
+- 描述：成就 `evaluate()` 当前 O(n) 全表扫 sessions；新建 `statsCache` 表缓存 `total / totalSeconds / byDay` 累计值，番茄完成时**增量更新**（+1, +N 秒），仅在导入/迁移/异常时全量重算
+- 价值：用户积累 1 年以上（>5000 session）时消除轻微卡顿
+- 复杂度：中（双表一致性维护：番茄完成增量、软删除反向回退、导入重算、Dexie version 迁移）
+- 候选版本：V1.x（profile-driven，**当前不做**）
+- 触发条件：profile 发现 `evaluate()` > 50ms **或** 用户反馈卡顿
+- 风险：违反 CLAUDE.md 准则 2"简单优先"，当前 < 30ms 无问题；预先做就是预测性优化
+- 关联：[04-data-model.md 成就系统-性能升级路径](04-data-model.md#成就系统v11-4) / [10-decisions-log.md 2026-06-23 V1.1 #4 决策](10-decisions-log.md)
+
 ---
 
 <!-- 新想法从这里追加 -->

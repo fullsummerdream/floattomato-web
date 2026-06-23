@@ -24,11 +24,14 @@ export interface PreferencesState {
   whitenoiseVolume: number
   /** 上次选中的白噪音音轨（持久化；刷新后 UI 显示选中态，但不自动播放：浏览器策略需手势） */
   whitenoiseTrack: TrackId | null
+  /** 成就反馈开关（V1.1 #4）— 关后不评估、不弹 toast；成就墙仍可查阅 */
+  achievementsEnabled: boolean
   setVolume: (v: VolumeLevel) => void
   setVibrate: (on: boolean) => void
   setPauseLimit: (s: PauseLimitSeconds) => void
   setWhitenoiseVolume: (v: number) => void
   setWhitenoiseTrack: (id: TrackId | null) => void
+  setAchievementsEnabled: (on: boolean) => void
 }
 
 export const usePreferencesStore = create<PreferencesState>()(
@@ -39,6 +42,7 @@ export const usePreferencesStore = create<PreferencesState>()(
       pauseLimit: 300,
       whitenoiseVolume: 60,
       whitenoiseTrack: null,
+      achievementsEnabled: true,
       setVolume: (volume) => {
         audioService.volume = volume
         set({ volume })
@@ -60,6 +64,7 @@ export const usePreferencesStore = create<PreferencesState>()(
         whiteNoiseService.setTrack(id)
         set({ whitenoiseTrack: id })
       },
+      setAchievementsEnabled: (on) => set({ achievementsEnabled: on }),
     }),
     {
       name: 'floattomato:preferences',

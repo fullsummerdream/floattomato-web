@@ -8,6 +8,9 @@ import { PersistenceService } from '@/service/PersistenceService'
 import { SessionDao } from '@/service/SessionDao'
 import { PresetDao } from '@/service/PresetDao'
 import { ensureDefaultPreset } from '@/service/DatabaseService'
+import { achievementService } from '@/service/AchievementService'
+import { useAchievementToastStore } from '@/store/achievementToastStore'
+import { usePreferencesStore } from '@/store/preferencesStore'
 import type { TimerRuntimeState, TimerPhase } from '@/types/TimerTypes'
 
 interface TimerStoreState {
@@ -35,6 +38,7 @@ export const PHASE_LABELS: Record<TimerPhase, string> = {
 // ---------- 接线：注入持久化与会话 sink ----------
 timerService.setPersistence((s) => PersistenceService.saveTimerState(s))
 // 番茄完成 → 自动写 PomodoroSession 入库（fire-and-forget，不阻塞 UI）
+// 入库完成后串联成就评估 → toast（保证 evaluate 能读到刚写入的 session）
 timerService.setSessionSink((session) => {
   SessionDao.add({
     taskId: session.taskId,
@@ -45,7 +49,19 @@ timerService.setSessionSink((session) => {
     pausedDuration: session.pausedDuration,
     status: session.status,
     presetId: session.presetId,
-  }).catch((err) => console.error('[SessionDao] 写入失败', err))
+  })
+    .then(() => {
+      // V1.1 #4 — 仅 completed 触发成就评估，开关关时静默
+      if (session.status !== 'completed') return
+      const enabled = usePreferencesStore.getState().achievementsEnabled
+      if (!enabled) return
+      return achievementService.evaluate().then((newly) => {
+        if (newly.length > 0) {
+          useAchievementToastStore.getState().push(newly)
+        }
+      })
+    })
+    .catch((err) => console.error('[SessionDao/Achievement] 写入/评估失败', err))
 })
 
 // 应用启动：初始化默认预设（幂等），随后把上次激活的预设注入 TimerService
@@ -55,6 +71,16 @@ void (async () => {
   const all = await PresetDao.listAll()
   const active = all.find((p) => p.id === activeId) ?? all[0]
   if (active) timerService.setActivePreset(active)
+})()
+
+// 应用启动 IIFE：成就首扫静默（评估但不弹 toast，避免久不开 app 后排队骚扰）
+// 设计依据：docs/10-decisions-log 「2026-06-23 V1.1 #4」决策 2「双触发点 + 首扫静默」
+void (async () => {
+  try {
+    await achievementService.evaluate()
+  } catch (err) {
+    console.error('[Achievement] 启动首扫失败', err)
+  }
 })()
 
 export const useTimerStore = create<TimerStoreState>((set) => ({
@@ -95,6 +121,7 @@ timerService.subscribe((e) => {
         isWorkComplete ? '番茄完成 🍅' : '休息结束',
         isWorkComplete ? '该休息一下了' : '回来专注吧',
       )
+      // 成就评估在 sessionSink → SessionDao.add().then() 链里完成，保证 evaluate 读到新写入
     }
   }
 })

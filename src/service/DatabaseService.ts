@@ -6,6 +6,7 @@ import type {
   PomodoroSession,
   PomodoroPreset,
 } from '@/types/TimerTypes'
+import type { AchievementRecord } from '@/types/AchievementTypes'
 import { DEFAULT_PRESET } from '@/service/presetConstants'
 
 export { DEFAULT_PRESET }
@@ -14,6 +15,8 @@ class FloatTomatoDB extends Dexie {
   tasks!: Table<Task, string>
   sessions!: Table<PomodoroSession, string>
   presets!: Table<PomodoroPreset, string>
+  // V1.1 #4 — 表中存在即解锁，无未解锁行
+  achievements!: Table<AchievementRecord, string>
 
   constructor() {
     super('floattomato')
@@ -23,6 +26,10 @@ class FloatTomatoDB extends Dexie {
       sessions:
         'id, uid, taskId, startAt, status, updatedAt, deletedAt, syncStatus',
       presets: 'id, uid, isDefault, updatedAt, syncStatus',
+    })
+    // V1.1 #4 — 新增 achievements 表，无既有数据迁移
+    this.version(2).stores({
+      achievements: 'id, unlockedAt',
     })
   }
 }
