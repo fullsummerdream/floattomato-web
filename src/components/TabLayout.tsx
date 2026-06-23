@@ -1,5 +1,11 @@
 // Tab 布局 — 依 docs/02 响应式断点表
 // sm/md：底部 Tab；lg：侧边 Tab
+//
+// 滚动容器铁律：`scrollbar-gutter: stable`
+// - 各页内容长度差异大（首页短、统计/任务长），垂直滚动条会按需出现/消失
+// - 滚动条宽 ~15px，出现时挤压 main 宽度 → 内部 mx-auto 居中的 ResponsivePage
+//   被重新居中 → 视觉上「页面切换动画结束后整体内容向右偏一点」
+// - stable 永久保留滚动条槽位，无论是否实际出现滚动条，宽度恒定，杜绝偏移
 import { NavLink } from 'react-router-dom'
 import { Timer, ListTodo, BarChart3, Settings, Palette, SlidersHorizontal } from 'lucide-react'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
@@ -41,7 +47,7 @@ export function TabLayout() {
             </NavLink>
           ))}
         </nav>
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto [scrollbar-gutter:stable]">
           <AnimatedOutlet />
         </main>
       </div>
@@ -51,7 +57,7 @@ export function TabLayout() {
   // 底部 Tab（手机 / 平板竖屏）
   return (
     <div className="flex h-full flex-col">
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto [scrollbar-gutter:stable]">
         <AnimatedOutlet />
       </main>
       <nav className="flex shrink-0 border-t border-neutral-200 pb-[env(safe-area-inset-bottom)] dark:border-neutral-800">

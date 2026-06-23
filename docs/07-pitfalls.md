@@ -24,6 +24,14 @@
 
 10. **数据迁移——导出 JSON schemaVersion 必须向下兼容**——应用升级后旧导出 JSON 仍需可导入。**定论**：导入向下兼容最近 2 个大版本，遇旧 `schemaVersion` 自动跑 migration；不支持跨大版本逆向导出。bump `schemaVersion` 必须同步维护迁移函数。判别口诀「导出 JSON 向下兼容 2 版，bump schema 必带 migration」。
 
+11. **`<button>` 内 `absolute` 子元素必须显式 `left`/`right`——禁只设 `top` 靠 translate 定位**——`<button>` UA 样式自带 `text-align: center`，未设 `left`/`right` 的 absolute 子元素按「static position」渲染时会被推到水平居中（约 `(buttonW − childW) / 2`），之后再叠加 `translate-x-*` 会从中心起算而非从左边。**典型现象**：自定义 switch（关闭态看上去贴在右端、再点开按下滑块直接溢出右边框）。**定论**：absolute thumb 必须 `left-0.5 top-0.5`（或显式 `right-*`）锚定起始位置，再用 `translate-x-0` / `translate-x-5` 做位移；禁省略 `left` 而靠 translate 兜底定位。同理适用任何 `<button>`/`<a>` 内带 absolute 浮层的组件（badge、tooltip 钉、状态点）。**边界澄清**：父级是 `flex items-center` / `grid place-items-center` 的容器时，absolute 子项 static 位置由 CSS spec 显式定义为「居中」，**不依赖 UA**，可以安全省略 `left`；只有 `<button>` / `<a>` / 父级 `text-center` 这类靠 `text-align: center` 隐式居中的场景才必须显式 `left`。判别口诀「button 里 absolute 必带 left/right，translate 只做位移；flex/grid 居中的 absolute 子项 spec 保证安全」。
+
+12. **Flex 行内的固定尺寸控件必须 `shrink-0`——禁裸放右侧开关/图标按钮**——`flex` 容器默认 `flex-shrink: 1`，当 flex-1 文字区内容变长时，旁边的固定宽度子项（开关 `w-11`、图标按钮 `w-8`、segment 控件）会被均匀压缩。开关被压扁后内部 absolute thumb 仍按原 translate 渲染 → 溢出错位；图标按钮被压扁后图标也会变形。**定论**:右侧任何「视觉上必须保持固定尺寸」的 flex 子项（switch / icon button / segment / chip 组）一律加 `shrink-0`，让 flex 只压缩文字 flex-1 区。判别口诀「flex 行内固定尺寸子项必 shrink-0，能压的只能是 flex-1 文字」。
+
+13. **路由内 `overflow-auto` 容器必须 `scrollbar-gutter: stable`——禁裸滚动条挤压宽度**——切 Tab 时新页面内容长度不同，垂直滚动条按需出现/消失，会令滚动容器可用宽变 ~15px，内部 `mx-auto` 居中元素被重新算坐标 → 视觉上「页面切换动画结束后整体内容向右一抖」。**定论**：`<main>` / 任何承载路由 Outlet 的 overflow-auto 容器必须加 `[scrollbar-gutter:stable]`，永久保留滚动条槽位，宽度恒定。代价是无滚动条页面右侧会多 ~15px 空白槽，比横跳更可接受。判别口诀「路由滚动容器必 stable，杜绝切页横跳」。
+
+14. **`<AnimatePresence mode="wait">` 必须配 `useOutlet()`——禁直接套 `<Outlet />`**——`<Outlet />` 是实时占位（路由一变立刻显示新页），而 `<AnimatePresence mode="wait">` 会等旧 `motion.div` 的 exit 完成才挂新元素，节奏错开 → 视觉上「新内容闪一下 → 旧框架 fade out → 中间一瞬空 → 新框架 fade in」，再次点同一 Tab 还会复现空白。**定论**：用 `useOutlet()` 拿当前 location 对应的 element 快照（stable ref），AnimatePresence 才能正确把旧 element 留到 exit 完成、再挂新 element 入场。`motion.div` 的 `key` 走 `location.pathname`：同路径再点（NavLink replay）key 不变，不触发 exit/enter，无闪烁。判别口诀「AnimatePresence + 路由动画用 useOutlet，Outlet 是定时炸弹」。
+
 ## 共通铁律（摘要）
 
 - **计时用 `Date.now()` 算剩余，禁 setInterval 累加**

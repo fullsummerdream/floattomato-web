@@ -145,9 +145,9 @@ export function SettingsPage() {
         </h2>
         <div className="flex items-center gap-md rounded-lg border border-neutral-200 px-md py-md dark:border-neutral-800">
           {perm === 'granted' ? (
-            <Bell size={18} className="text-primary" />
+            <Bell size={18} className="shrink-0 text-primary" />
           ) : (
-            <BellOff size={18} className="text-neutral-400" />
+            <BellOff size={18} className="shrink-0 text-neutral-400" />
           )}
           <div className="flex-1">
             <div className="text-sm">
@@ -180,9 +180,9 @@ export function SettingsPage() {
         </h2>
         <div className="flex items-center gap-md rounded-lg border border-neutral-200 px-md py-md dark:border-neutral-800">
           {installed ? (
-            <CheckCircle2 size={18} className="text-primary" />
+            <CheckCircle2 size={18} className="shrink-0 text-primary" />
           ) : (
-            <Download size={18} className="text-neutral-400" />
+            <Download size={18} className="shrink-0 text-neutral-400" />
           )}
           <div className="flex-1">
             <div className="text-sm">
@@ -214,7 +214,7 @@ export function SettingsPage() {
         </h2>
         <div className="rounded-lg border border-neutral-200 dark:border-neutral-800">
           <div className="flex items-center gap-md px-md py-md">
-            <Save size={18} className="text-neutral-400" />
+            <Save size={18} className="shrink-0 text-neutral-400" />
             <div className="flex-1">
               <div className="text-sm">导出 JSON</div>
               <div className="mt-xs text-xs text-neutral-400">
@@ -233,7 +233,7 @@ export function SettingsPage() {
           </div>
           <div className="h-px bg-neutral-200 dark:bg-neutral-800" />
           <div className="flex items-center gap-md px-md py-md">
-            <Upload size={18} className="text-neutral-400" />
+            <Upload size={18} className="shrink-0 text-neutral-400" />
             <div className="flex-1">
               <div className="text-sm">导入 JSON</div>
               <div className="mt-xs text-xs text-neutral-400">
@@ -298,7 +298,7 @@ export function SettingsPage() {
           </div>
           {/* 4 档音量 segment */}
           <div
-            className="flex overflow-hidden rounded-md border border-neutral-300 dark:border-neutral-700"
+            className="flex shrink-0 overflow-hidden rounded-md border border-neutral-300 dark:border-neutral-700"
             role="group"
             aria-label="音量档位"
             data-testid="volume-segment"
@@ -327,7 +327,7 @@ export function SettingsPage() {
             disabled={volume === 0}
             aria-label="试听提示音"
             data-testid="btn-sound-preview"
-            className="flex h-8 w-8 items-center justify-center rounded-md border border-neutral-300 text-neutral-600 hover:border-primary hover:text-primary disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-neutral-300 text-neutral-600 hover:border-primary hover:text-primary disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-300"
           >
             <Play size={14} />
           </button>
@@ -362,7 +362,7 @@ export function SettingsPage() {
               onClick={previewVibrate}
               aria-label="试振"
               data-testid="btn-vibrate-preview"
-              className="flex h-8 w-8 items-center justify-center rounded-md border border-neutral-300 text-neutral-600 hover:border-primary hover:text-primary dark:border-neutral-700 dark:text-neutral-300"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-neutral-300 text-neutral-600 hover:border-primary hover:text-primary dark:border-neutral-700 dark:text-neutral-300"
             >
               <Play size={14} />
             </button>
@@ -376,15 +376,15 @@ export function SettingsPage() {
             disabled={!vibrateSupported}
             onClick={() => setVibrate(!vibrateEnabled)}
             data-testid="switch-vibrate"
-            className={`relative h-6 w-11 rounded-full transition-colors disabled:opacity-40 ${
+            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-40 ${
               vibrateEnabled && vibrateSupported
                 ? 'bg-primary'
                 : 'bg-neutral-300 dark:bg-neutral-700'
             }`}
           >
             <span
-              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                vibrateEnabled ? 'translate-x-5' : 'translate-x-0.5'
+              className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                vibrateEnabled ? 'translate-x-5' : 'translate-x-0'
               }`}
             />
           </button>
@@ -397,7 +397,7 @@ export function SettingsPage() {
           单次暂停限时
         </h2>
         <div className="flex items-center gap-md rounded-lg border border-neutral-200 px-md py-md dark:border-neutral-800">
-          <Timer size={18} className="text-primary" />
+          <Timer size={18} className="shrink-0 text-primary" />
           <div className="flex-1">
             <div className="text-sm">超时未恢复将自动中断当前番茄</div>
             <div className="mt-xs text-xs text-neutral-400">
@@ -474,14 +474,14 @@ export function SettingsPage() {
           data-testid="link-about"
           className="flex items-center gap-md rounded-lg border border-neutral-200 px-md py-md hover:border-primary dark:border-neutral-800"
         >
-          <Info size={18} className="text-neutral-400" />
+          <Info size={18} className="shrink-0 text-neutral-400" />
           <div className="flex-1">
             <div className="text-sm">关于飘悠番茄</div>
             <div className="mt-xs text-xs text-neutral-400">
               版本信息 · 隐私协议 · 用户协议
             </div>
           </div>
-          <ChevronRight size={16} className="text-neutral-400" />
+          <ChevronRight size={16} className="shrink-0 text-neutral-400" />
         </Link>
       </section>
     </ResponsivePage>
