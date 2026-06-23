@@ -129,9 +129,11 @@ export function HomePage() {
               </span>
             )}
             {activeTasks.map((t) => (
-              <button
+              <motion.button
                 key={t.id}
                 type="button"
+                whileTap={pressScale}
+                transition={pressSpring}
                 onClick={() => setSelectedTaskId(t.id)}
                 className={`flex items-center gap-0.5 rounded-full border px-md py-sm text-sm transition-all ${
                   selectedTaskId === t.id
@@ -144,7 +146,7 @@ export function HomePage() {
                   style={{ backgroundColor: t.color }}
                 />
                 {t.name}
-              </button>
+              </motion.button>
             ))}
           </div>
         )}

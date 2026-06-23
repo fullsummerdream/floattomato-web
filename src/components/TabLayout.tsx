@@ -1,8 +1,9 @@
 // Tab 布局 — 依 docs/02 响应式断点表
 // sm/md：底部 Tab；lg：侧边 Tab
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { Timer, ListTodo, BarChart3, Settings, Palette, SlidersHorizontal } from 'lucide-react'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
+import { AnimatedOutlet } from '@/components/AnimatedOutlet'
 
 const TABS = [
   { to: '/', label: '计时', icon: Timer, end: true },
@@ -41,7 +42,7 @@ export function TabLayout() {
           ))}
         </nav>
         <main className="flex-1 overflow-auto">
-          <Outlet />
+          <AnimatedOutlet />
         </main>
       </div>
     )
@@ -51,7 +52,7 @@ export function TabLayout() {
   return (
     <div className="flex h-full flex-col">
       <main className="flex-1 overflow-auto">
-        <Outlet />
+        <AnimatedOutlet />
       </main>
       <nav className="flex shrink-0 border-t border-neutral-200 pb-[env(safe-area-inset-bottom)] dark:border-neutral-800">
         {TABS.map(({ to, label, icon: Icon, end }) => (
