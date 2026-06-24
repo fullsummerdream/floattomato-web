@@ -8,6 +8,7 @@ import type {
 } from '@/types/TimerTypes'
 import type { AchievementRecord } from '@/types/AchievementTypes'
 import type { DiaryRecord } from '@/types/DiaryTypes'
+import type { UserAudio } from '@/types/UserAudioTypes'
 import { DEFAULT_PRESET } from '@/service/presetConstants'
 
 export { DEFAULT_PRESET }
@@ -20,6 +21,8 @@ class FloatTomatoDB extends Dexie {
   achievements!: Table<AchievementRecord, string>
   // V1.2 #1 — 番茄日记，sessionId 外键关联 PomodoroSession
   pomodoroDiary!: Table<DiaryRecord, string>
+  // V1.2 #4 — 用户上传本地音频（Blob 存 IDB；TrackId = 'user-<uuid>'）
+  userAudios!: Table<UserAudio, string>
 
   constructor() {
     super('floattomato')
@@ -38,6 +41,10 @@ class FloatTomatoDB extends Dexie {
     // sessionId 二级索引：Trigger C「时间线补写」按 sessionId 查询是否已写，必须有索引避免全表扫
     this.version(3).stores({
       pomodoroDiary: 'id, sessionId, createdAt, updatedAt, deletedAt, syncStatus',
+    })
+    // V1.2 #4 — 用户音频；按 addedAt DESC 列出，不软删（Blob 单价高，硬删省空间）
+    this.version(4).stores({
+      userAudios: 'id, addedAt',
     })
   }
 }

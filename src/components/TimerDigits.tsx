@@ -1,13 +1,21 @@
 // TimerDigits — 倒计时数字
-// 依 docs/02-design-system.md 4 套数字样式
+// 依 docs/02-design-system.md 数字样式（V1.2 #4 扩到 6 种）
 //   classic     — Bold 等宽
 //   thin        — Light 字重，细线
 //   flip        — 机械翻牌（逐位 CSS transform + Framer Motion 200ms）
 //   dotmatrix   — 数码管点阵（text-shadow 多层叠加发光）
+//   digital     — 七段数显 LCD 风（ghost "888:88" + 实数字叠加，绿色发光）
+//   chunky      — 圆润粗黑体（饱满 q 弹气质，与 thin / flip 对比）
 import { AnimatePresence, motion } from 'framer-motion'
 import { DIGIT_FLIP_MS } from '@/theme/motion'
 
-export type NumberStyle = 'classic' | 'thin' | 'flip' | 'dotmatrix'
+export type NumberStyle =
+  | 'classic'
+  | 'thin'
+  | 'flip'
+  | 'dotmatrix'
+  | 'digital'
+  | 'chunky'
 
 interface TimerDigitsProps {
   /** mm:ss 格式字符串 */
@@ -98,6 +106,60 @@ export function TimerDigits({ text, style = 'classic' }: TimerDigitsProps) {
           textShadow:
             '0 0 4px var(--color-accent), 0 0 10px var(--color-accent), 0 0 20px var(--color-accent), 0 0 40px rgba(255,107,53,0.4)',
           letterSpacing: '0.05em',
+        }}
+      >
+        {text}
+      </span>
+    )
+  }
+
+  if (style === 'digital') {
+    // 七段数显 LCD 风：ghost "888:88" 暗底 + 实际数字叠加
+    // 用 .filter(c => c) 防 split('') 留空；位置由 absolute 容器对齐
+    return (
+      <span
+        className="font-mono font-bold tracking-tight"
+        style={{
+          fontSize: FONT_SIZE,
+          letterSpacing: '0.15em',
+          color: '#22ff66',
+          textShadow:
+            '0 0 6px rgba(34,255,102,0.7), 0 0 14px rgba(34,255,102,0.45)',
+          position: 'relative',
+          display: 'inline-block',
+        }}
+      >
+        {/* ghost 底层 — 同字符宽度的 8（点亮全段的 LCD 视感） */}
+        <span
+          aria-hidden
+          style={{
+            position: 'absolute',
+            inset: 0,
+            color: 'rgba(34,255,102,0.08)',
+            textShadow: 'none',
+            pointerEvents: 'none',
+          }}
+        >
+          {text.replace(/\d/g, '8')}
+        </span>
+        <span style={{ position: 'relative' }}>{text}</span>
+      </span>
+    )
+  }
+
+  if (style === 'chunky') {
+    // 圆润粗黑体 — 饱满 q 弹气质，与 thin / flip 形成对比
+    // 使用系统字体 ExtraBold + 紧字距 + 微妙阴影
+    return (
+      <span
+        className="tracking-tight text-primary"
+        style={{
+          fontSize: FONT_SIZE,
+          fontWeight: 900,
+          fontFamily:
+            '"Nunito", "Quicksand", "Source Han Sans CN", -apple-system, system-ui, sans-serif',
+          letterSpacing: '-0.04em',
+          textShadow: '0 2px 0 rgba(0,0,0,0.06)',
         }}
       >
         {text}

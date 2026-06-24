@@ -393,3 +393,82 @@
 **下一步**：commit → 等用户决定是否进 V1.2 #4（用户上传本地音频 + 数字样式扩到 6 种）
 
 ---
+
+## 2026-06-24 — V1.2 #4 用户上传音频 + 数字样式扩到 6 种
+
+**背景**：V1.2 路线最后一步，两个轻量收尾项打包：(a) 用户可上传本地音频混入白噪音；(b) 数字样式从 4 种扩到 6 种。
+
+### #4a 用户上传音频
+
+**关键拍板**：
+
+1. **Blob 存 IndexedDB（Dexie schema v4，新增 `userAudios` 表）**
+   - 否决 localStorage：localStorage 是字符串 + 5MB 总配额，存 base64 音频体积膨胀 33% 且很快爆配额
+   - 否决 OPFS：浏览器兼容性参差（Safari 15.2 才支持），IDB blob 类型在所有目标浏览器原生支持
+   - 表 schema：`userAudios: 'id, addedAt'`，按 addedAt DESC 列出；不软删（Blob 单价高直接硬删省空间）
+
+2. **TrackId 扩为 union：`BuiltinTrackId | \`user-${string}\``**
+   - 否决独立的 `UserTrackId` 平行类型：会让 WhiteNoiseService.addTrack 等所有 API 出现 union 分支
+   - 现路径：`isUserTrack(id)` 一行守卫 + `loadBuffer` 内部走 IDB 或 fetch 两条路；其他代码零改动
+   - user-* 前缀保证编译期能与内置 ID 严格区分
+
+3. **WhiteNoiseService.loadBuffer 路径分流**
+   - 内置：`fetch('/audio/*.mp3') → arrayBuffer → decodeAudioData`
+   - 用户：`UserAudioDao.getBlob(id) → blob.arrayBuffer() → decodeAudioData`
+   - 解码后**同一 bufferCache**，二次激活零额外开销
+
+4. **5MB / 10 条上限（前端 + UI 提示）**
+   - 5MB ≈ 1-2 分钟低码率 mp3，够白噪音循环使用；超出 → 抛 `UserAudioUploadError('too-large')`，UI 显示 inline 2.4s 自消错误
+   - 10 条软上限（UI 拒绝点 + 按钮）：移动端 chip 行不至太长 + IDB 不至撑爆
+   - 不在 IDB 强制约束（数据层只做存）
+
+5. **删除联动：硬删 + invalidate buffer + 从 mix 移除**
+   - 用户点 chip 上的 X → 三件事原子化（mix.removeTrack → service.invalidateBuffer → UserAudioDao.delete）
+   - `invalidateBuffer` 是 V1.2 #4 新增的 API：失效 bufferCache 中的对应条目；防止用户先删后传同名文件命中旧缓存
+
+6. **不导出到 BackupService**
+   - 用户音频是 IDB blob，base64 后 JSON 几 MB 撑爆备份文件
+   - 跨设备就重新上传 —— 不是核心数据，用户体感低
+   - 后续若需要可加 ZIP 包含分离 audio/ 目录，留 V2.x
+
+### #4b 数字样式扩到 6 种
+
+7. **加 `digital` + `chunky` 两种**（与现有 4 种视觉差异最大）
+   - **digital**：七段数显 LCD 风 —— ghost `888:88` 暗底 + 实数字叠加发光绿（`#22ff66`）
+     - 与 `dotmatrix` 区别：dotmatrix 是橙色发光像素感；digital 是 LCD 屏「点亮全段」科技感
+   - **chunky**：圆润粗黑体（fontWeight 900 + Nunito/Quicksand fallback）
+     - 与 `thin` / `flip` 对比：thin 是冷淡瘦长，flip 是机械翻转，chunky 是饱满 q 弹
+   - 两种均纯 CSS 实现，**不引入 woff2 字体文件**（PWA 包体积友好）
+
+8. **AppearancePage 数字样式 grid 从 4 项 → 6 项**
+   - 现 `grid-cols-2` 自然 3 行布局，无需调栅格
+
+**沉淀（代码）**：
+- [src/types/UserAudioTypes.ts](../src/types/UserAudioTypes.ts) 新增 `UserAudio` 类型 + `USER_AUDIO_MAX_SIZE/_LABEL/_COUNT` 常量
+- [src/service/DatabaseService.ts](../src/service/DatabaseService.ts) Dexie `version(4)` + `userAudios` 表
+- [src/service/UserAudioDao.ts](../src/service/UserAudioDao.ts) CRUD + 5MB 校验 + `UserAudioUploadError`（reason: too-large / not-audio / idb-fail）
+- [src/service/whitenoiseTracks.ts](../src/service/whitenoiseTracks.ts) `BuiltinTrackId` 与 `TrackId` 拆分 + `isUserTrack` helper
+- [src/service/WhiteNoiseService.ts](../src/service/WhiteNoiseService.ts) `loadBuffer` 走 IDB blob 路径分流 + `addTrack` 跳过 TRACKS 表校验 + `invalidateBuffer` 新方法
+- [src/components/WhiteNoiseBar.tsx](../src/components/WhiteNoiseBar.tsx) 「我的」组 + 上传按钮 + 删除小按钮 + inline 上传错误
+- [src/components/TimerDigits.tsx](../src/components/TimerDigits.tsx) `digital` + `chunky` 两种新样式
+- [src/pages/AppearancePage.tsx](../src/pages/AppearancePage.tsx) NUMBER_STYLES 数组从 4 项扩到 6 项
+- [scripts/test-userAudio.py](../scripts/test-userAudio.py) 新增 16 项冒烟（5MB 拒/WAV 上传/进 mix/混音上限/删除联动/6 数字样式）
+
+**回归验证**：
+- 新 test-userAudio.py 16 PASS
+- test-whitenoise.py 22 PASS（多轨）/ test-diary.py 16 PASS / test-achievements.py 10 PASS / test-timeline.py PASS
+
+**不沉淀（YAGNI）**：
+- 音频格式转换 / 时长裁剪 / 淡入淡出 / 缩略图
+- 多轨混音预设保存（V2.x 评估）
+- 字体 woff2 文件（PWA 包体积/首屏 LCP 优先）
+
+**V1.2 完整闭环**：
+- #1 番茄日记 ✅
+- #2 多轨混音底座（Web Audio API）✅
+- #3 多轨混音 UI + AnalyserNode 频谱 ✅
+- #4 用户上传音频 + 数字样式扩到 6 种 ✅
+
+**下一步**：commit → V1.2 全部完成，等用户决定上线或继续迭代
+
+---

@@ -33,6 +33,8 @@ const NUMBER_STYLES: { value: NumberStyle; label: string; preview: string }[] = 
   { value: 'thin', label: '细线', preview: '25:00' },
   { value: 'flip', label: '翻牌', preview: '25:00' },
   { value: 'dotmatrix', label: '点阵', preview: '25:00' },
+  { value: 'digital', label: '数显', preview: '25:00' },
+  { value: 'chunky', label: '圆胖', preview: '25:00' },
 ]
 
 const BACKGROUNDS: { value: BackgroundPreset; label: string; swatch: string }[] = [

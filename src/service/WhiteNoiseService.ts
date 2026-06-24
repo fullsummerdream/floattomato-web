@@ -9,7 +9,8 @@
 //   新 API：addTrack / removeTrack / setTrackVolume / getMix / getAnalyser
 // - bufferCache 沿用 #2，多轨切换零额外解码开销
 
-import { TRACKS, type TrackId } from './whitenoiseTracks'
+import { TRACKS, isUserTrack, type TrackId } from './whitenoiseTracks'
+import { UserAudioDao } from './UserAudioDao'
 
 export type WhiteNoiseStatus = 'idle' | 'loading' | 'playing' | 'missing' | 'error'
 
@@ -105,11 +106,12 @@ class WhiteNoiseService {
     return this.analyser
   }
 
-  /** 加载 + 解码一条 track 到 AudioBuffer（命中缓存直接返回） */
-  private async loadBuffer(track: { id: TrackId; src: string }): Promise<AudioBuffer | null> {
-    const cached = this.bufferCache.get(track.id)
+  /** 加载 + 解码一条 track 到 AudioBuffer（命中缓存直接返回）
+   *  内置音轨走 fetch /audio/*.mp3；V1.2 #4 用户音轨走 IDB blob */
+  private async loadBuffer(trackId: TrackId): Promise<AudioBuffer | null> {
+    const cached = this.bufferCache.get(trackId)
     if (cached) return cached
-    const pending = this.loadingPromise.get(track.id)
+    const pending = this.loadingPromise.get(trackId)
     if (pending) return pending
 
     const ctx = this.ensureCtx()
@@ -117,31 +119,44 @@ class WhiteNoiseService {
 
     const p = (async () => {
       try {
-        const resp = await fetch(track.src)
-        if (!resp.ok) return null
-        const arr = await resp.arrayBuffer()
+        let arr: ArrayBuffer
+        if (isUserTrack(trackId)) {
+          // 用户上传：从 IDB 取 blob
+          const blob = await UserAudioDao.getBlob(trackId)
+          if (!blob) return null
+          arr = await blob.arrayBuffer()
+        } else {
+          const track = TRACKS.find((t) => t.id === trackId)
+          if (!track) return null
+          const resp = await fetch(track.src)
+          if (!resp.ok) return null // 404 = 用户未跑 fetch-audio
+          arr = await resp.arrayBuffer()
+        }
         const buffer = await new Promise<AudioBuffer>((resolve, reject) => {
           ctx.decodeAudioData(arr, resolve, reject)
         })
-        this.bufferCache.set(track.id, buffer)
+        this.bufferCache.set(trackId, buffer)
         return buffer
       } catch {
         return null
       } finally {
-        this.loadingPromise.delete(track.id)
+        this.loadingPromise.delete(trackId)
       }
     })()
-    this.loadingPromise.set(track.id, p)
+    this.loadingPromise.set(trackId, p)
     return p
   }
 
   // ============ V1.2 #3 新 API ============
 
-  /** 加入一条 track 到混音；若已在 mix 中则 no-op */
+  /** 加入一条 track 到混音；若已在 mix 中则 no-op
+   *  内置音轨需在 TRACKS 表里；user-* 跳过表校验（从 IDB 取） */
   addTrack(trackId: TrackId, initialVolume = 80) {
     if (this.active.has(trackId)) return
-    const track = TRACKS.find((t) => t.id === trackId)
-    if (!track) return
+    if (!isUserTrack(trackId)) {
+      const track = TRACKS.find((t) => t.id === trackId)
+      if (!track) return
+    }
     const ctx = this.ensureCtx()
     if (!ctx || !this.masterGain) return
 
@@ -160,7 +175,7 @@ class WhiteNoiseService {
     this.emit()
 
     const token = ++entry.loadToken
-    void this.loadBuffer(track).then((buffer) => {
+    void this.loadBuffer(trackId).then((buffer) => {
       // 过期检查：可能已 removeTrack
       const current = this.active.get(trackId)
       if (!current || current.loadToken !== token) return
@@ -217,6 +232,11 @@ class WhiteNoiseService {
   /** 全清（V1.2 #3：取代单轨 stop 的语义） */
   clearMix() {
     Array.from(this.active.keys()).forEach((id) => this.removeTrack(id))
+  }
+
+  /** 失效 buffer 缓存（V1.2 #4：用户删除上传音频后调） */
+  invalidateBuffer(trackId: TrackId) {
+    this.bufferCache.delete(trackId)
   }
 
   /** 设置 master 总音量（0-100），5ms 软过渡 */

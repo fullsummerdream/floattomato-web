@@ -1,9 +1,10 @@
-// 白噪音音轨清单（15 段，分 4 组）
+// 白噪音音轨清单（15 段内置 + V1.2 #4 用户上传 'user-<uuid>'）
 // 音频文件位于 public/audio/，不进 git（见 .gitignore）
 // 用户首次部署需运行 npm run fetch-audio 下载
 // 音频来源：moodist 开源项目（详见 docs/AUDIO_CREDITS.md）
 
-export type TrackId =
+/** 内置音轨 id（编译期常量） */
+export type BuiltinTrackId =
   // 雨声系
   | 'rain-light'
   | 'rain-medium'
@@ -23,6 +24,9 @@ export type TrackId =
   | 'white-noise'
   | 'pink-noise'
   | 'brown-noise'
+
+/** 音轨 id —— 内置 union 或 V1.2 #4 用户上传 'user-<uuid>' */
+export type TrackId = BuiltinTrackId | `user-${string}`
 
 export type TrackGroup = 'rain' | 'nature' | 'urban' | 'noise'
 
@@ -72,4 +76,9 @@ export function tracksByGroup(): Record<TrackGroup, Track[]> {
     },
     { rain: [], nature: [], urban: [], noise: [] } as Record<TrackGroup, Track[]>,
   )
+}
+
+/** 判断是否为用户上传音轨（id 以 'user-' 开头） */
+export function isUserTrack(id: TrackId): boolean {
+  return id.startsWith('user-')
 }
